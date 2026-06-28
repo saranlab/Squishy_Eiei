@@ -79,10 +79,9 @@ export const TOYS = [
     id: 'butter',
     name: 'Butter',
     emoji: '🧈',
-    color: '#F8E050',       // bright clean butter yellow
-    colorDark: '#C89820',
-    colorLight: '#FFF8C0',
-    foilColor: '#D4A412',   // medium gold foil wrap
+    color: '#EDE8C0',       // pale cream — real butter wrapper color
+    colorDark: '#C4B870',
+    colorLight: '#F8F5E0',
     geometry: 'butter',
     speed: 'slow',
     riseSpeed: SPEED_PRESETS.slow,
@@ -91,7 +90,7 @@ export const TOYS = [
     id: 'chocolate',
     name: 'Chocolate',
     emoji: '🍫',
-    color: '#7B4528',
+    color: '#7A4228',       // warm medium chocolate brown
     colorDark: '#4A2210',
     colorLight: '#B07050',
     geometry: 'chocolate',

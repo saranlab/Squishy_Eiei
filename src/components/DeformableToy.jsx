@@ -1,7 +1,9 @@
 import { useRef, useMemo, useState, useCallback, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
+import { Text } from '@react-three/drei'
 import * as THREE from 'three'
 import { playSquish, playCrack } from '../SoundEngine'
+import { buildComposedGeo, makeVertexColors, getFrontZ } from '../data/shapes'
 
 const SEGS = 26  // higher = smoother wrinkles
 
@@ -22,35 +24,29 @@ function accumulateSquishes(base, squishes, now) {
     } else {
       const t = Math.min((now - s.releaseTime) / s.duration, 1)
       if (t >= 1) continue
-      // easeOutBack gives a tiny bounce-back overshoot — satisfying spring feel
       depth = -s.releaseDepth * (1 - easeOutBack(t))
     }
     const innerR = s.radius
-    const outerR = s.radius * 1.55
+    const outerR = s.radius * 1.6
     for (let i = 0; i < out.length; i += 3) {
       const dx = out[i] - s.px, dy = out[i+1] - s.py, dz = out[i+2] - s.pz
       const dist = Math.sqrt(dx*dx + dy*dy + dz*dz)
       if (dist < 0.001) continue
       if (dist < innerR) {
-        const f = Math.pow(1 - dist / innerR, 2)
-        out[i] += s.nx * depth * f; out[i+1] += s.ny * depth * f; out[i+2] += s.nz * depth * f
-
-        // Wrinkle creases — position-based noise so they're irregular, not symmetric rings
-        if (dist > 0.06) {
-          // Angle in the tangent plane around the press center (breaks ring symmetry)
-          const ndot = dx * s.nx + dy * s.ny + dz * s.nz
-          const angle = Math.atan2(dy - s.ny * ndot, dx - s.nx * ndot)
-          // Multiplied sine waves with different frequencies = aperiodic, won't form faces
-          const noise = Math.sin(dist * 7 + angle * 1.9) * Math.cos(dist * 4.3 - angle * 3.1)
-          const edgePeak = (dist / innerR) * (1 - dist / innerR) * 4
-          const ripple = noise * Math.abs(depth) * 0.13 * edgePeak
-          // Wrinkles push tangentially (perpendicular to normal) — physically correct
-          out[i]   -= s.nx * ripple; out[i+1] -= s.ny * ripple; out[i+2] -= s.nz * ripple
-        }
+        // Finger-press profile: flat contact plateau in the center (the finger pad),
+        // then smooth cosine rolloff to zero at the edge — no sharp spike at center.
+        const ratio = dist / innerR
+        const f = ratio < 0.42
+          ? 1.0
+          : 0.5 * (1 + Math.cos(Math.PI * (ratio - 0.42) / 0.58))
+        out[i]   += s.nx * depth * f
+        out[i+1] += s.ny * depth * f
+        out[i+2] += s.nz * depth * f
       } else if (dist < outerR) {
+        // Outer bulge — foam rises naturally around the pressed zone
         const tt = (dist - innerR) / (outerR - innerR)
-        const f = Math.pow(1 - tt, 2) * 0.45
-        out[i] += (dx/dist) * Math.abs(depth) * f
+        const f = Math.pow(1 - tt, 2) * 0.34
+        out[i]   += (dx/dist) * Math.abs(depth) * f
         out[i+1] += (dy/dist) * Math.abs(depth) * f
         out[i+2] += (dz/dist) * Math.abs(depth) * f
       }
@@ -99,13 +95,84 @@ function buildAvocadoGeo() {
   return geo
 }
 
+// Generic rounded-box helper — used for butter body and chocolate segments
+function buildRoundedBoxGeo(w, h, d, segsX, segsY, segsZ, r) {
+  const geo = new THREE.BoxGeometry(w, h, d, segsX, segsY, segsZ)
+  const pos = geo.attributes.position
+  const hx = w/2, hy = h/2, hz = d/2
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i)
+    const cx = Math.max(-(hx - r), Math.min(hx - r, x))
+    const cy = Math.max(-(hy - r), Math.min(hy - r, y))
+    const cz = Math.max(-(hz - r), Math.min(hz - r, z))
+    const dx = x - cx, dy = y - cy, dz = z - cz
+    const dist = Math.sqrt(dx*dx + dy*dy + dz*dz)
+    if (dist > 1e-5) { pos.setXYZ(i, cx + dx/dist*r, cy + dy/dist*r, cz + dz/dist*r) }
+  }
+  pos.needsUpdate = true
+  geo.computeVertexNormals()
+  return geo
+}
+
+function buildButterGeo() {
+  // Very wide flat slab, minimal edge softening so it reads as a clear rectangle
+  return buildRoundedBoxGeo(2.9, 0.82, 0.46, 18, 8, 6, 0.04)
+}
+
+function buildChocolateGeo() {
+  // Single merged geometry: flat base + 15 rounded-square bumps (5 cols × 3 rows)
+  // Merging into one mesh means squish deformation applies to bumps AND base together
+  const cols = 5, rows = 3
+  const W = 2.5, H = 1.45
+  const stepX = W / cols, stepY = H / rows
+
+  const toFlat = g => {
+    const f = g.toNonIndexed()
+    g.dispose()
+    return f
+  }
+
+  const base = toFlat(new THREE.BoxGeometry(W, H, 0.42, 8, 5, 2))
+  const parts = [base]
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const tx = -W/2 + stepX/2 + c * stepX
+      const ty = -H/2 + stepY/2 + r * stepY
+      const bump = toFlat(buildRoundedBoxGeo(0.42, 0.44, 0.24, 4, 4, 2, 0.09))
+      const bPos = bump.attributes.position
+      for (let i = 0; i < bPos.count; i++) {
+        bPos.setXYZ(i, bPos.getX(i) + tx, bPos.getY(i) + ty, bPos.getZ(i) + 0.25)
+      }
+      bPos.needsUpdate = true
+      parts.push(bump)
+    }
+  }
+
+  // Manually merge all non-indexed parts into one BufferGeometry
+  let total = 0
+  for (const g of parts) total += g.attributes.position.count
+  const merged = new Float32Array(total * 3)
+  let off = 0
+  for (const g of parts) {
+    merged.set(g.attributes.position.array, off * 3)
+    off += g.attributes.position.count
+    g.dispose()
+  }
+
+  const out = new THREE.BufferGeometry()
+  out.setAttribute('position', new THREE.BufferAttribute(merged, 3))
+  out.computeVertexNormals()
+  return out
+}
+
 function buildGeometry(geo) {
   switch (geo) {
     case 'bread':             return buildBreadGeo()
     case 'avocado':           return buildAvocadoGeo()
+    case 'butter':            return buildButterGeo()
     case 'box': case 'chonk': return new THREE.BoxGeometry(1.6, 1.1, 1.0, 8, 6, 6)
-    case 'butter':            return new THREE.BoxGeometry(2.2, 0.72, 0.88, 10, 5, 5)
-    case 'chocolate':         return new THREE.BoxGeometry(1.5, 1.0, 0.5, 8, 6, 4)
+    case 'chocolate':         return buildChocolateGeo()
     case 'torus':             return new THREE.TorusGeometry(0.65, 0.38, 14, 28)
     default:                  return new THREE.SphereGeometry(1, SEGS, SEGS)
   }
@@ -159,8 +226,15 @@ function Mouth({ face }) {
   return <mesh geometry={geo}><meshStandardMaterial color="#111" roughness={0.4} /></mesh>
 }
 
+// Pull a flat tangent-plane point back onto the curved surface so the crack
+// hugs the toy instead of floating above it (keeps the wax↔squishy gap ≈ 0).
+function snapToSurface(p, radius) {
+  p.setLength(radius)
+  return p
+}
+
 // Glass-drop crack — starburst from impact, with branching, stays localized
-function genCracks(center, normal, duration) {
+function genCracks(center, normal, duration, curved = false) {
   const n = normal.clone().normalize()
   const up = Math.abs(n.y) < 0.85 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)
   const t1 = new THREE.Vector3().crossVectors(n, up).normalize()
@@ -193,7 +267,9 @@ function genCracks(center, normal, duration) {
     }
   }
 
-  const geo = new THREE.BufferGeometry().setFromPoints(pts)
+  // On curved toys, snap the flat starburst onto the surface (gap ≈ 0)
+  const finalPts = curved ? pts.map(p => snapToSurface(p, center.length() + 0.012)) : pts
+  const geo = new THREE.BufferGeometry().setFromPoints(finalPts)
   return { geo, birthTime: performance.now(), duration: duration * 0.5 }
 }
 
@@ -274,23 +350,15 @@ function Accessories({ toy }) {
       <mesh position={[0.54, 0.82, 0.27]} rotation={[0, 0, 0.3]}><coneGeometry args={[0.1, 0.32, 4]} /><meshStandardMaterial color="#FFCCE0" /></mesh>
     </>)
     case 'butter': {
-      const fc = toy.foilColor || '#C8A820'
+      // Butter label text — matching reference: "SALTED" small top, "BUTTER" large, weight info below
+      // Butter front face is at z ≈ 0.23; text sits just in front at z=0.25
+      const blue = '#3A68BE'
+      const z = 0.25
       return (<>
-        {/* Bottom strip — sits flush under the butter */}
-        <mesh position={[0, -0.248, 0]}>
-          <boxGeometry args={[2.26, 0.23, 0.92]} />
-          <meshStandardMaterial color={fc} roughness={0.62} metalness={0.38} />
-        </mesh>
-        {/* Left end-cap — foil folded up the side */}
-        <mesh position={[-1.108, 0.02, 0]}>
-          <boxGeometry args={[0.058, 0.58, 0.92]} />
-          <meshStandardMaterial color={fc} roughness={0.62} metalness={0.38} />
-        </mesh>
-        {/* Right end-cap */}
-        <mesh position={[1.108, 0.02, 0]}>
-          <boxGeometry args={[0.058, 0.58, 0.92]} />
-          <meshStandardMaterial color={fc} roughness={0.62} metalness={0.38} />
-        </mesh>
+        <Text position={[0, 0.23, z]} fontSize={0.085} color={blue} anchorX="center" anchorY="middle" letterSpacing={0.14}>SALTED</Text>
+        <Text position={[0, 0.00, z]} fontSize={0.28}  color={blue} anchorX="center" anchorY="middle" letterSpacing={0.06}>BUTTER</Text>
+        <Text position={[-0.55, -0.27, z]} fontSize={0.085} color={blue} anchorX="center" anchorY="middle">4oz.</Text>
+        <Text position={[-0.40, -0.33, z]} fontSize={0.058} color={blue} anchorX="center" anchorY="middle">NET WT. (113 G)</Text>
       </>)
     }
     case 'hamster': return (<>
@@ -301,16 +369,263 @@ function Accessories({ toy }) {
       <mesh position={[-0.54, 0.82, 0.38]}><sphereGeometry args={[0.12, 8, 6]} /><meshStandardMaterial color="#F2A0A8" roughness={0.8} /></mesh>
       <mesh position={[0.54, 0.82, 0.38]}><sphereGeometry args={[0.12, 8, 6]} /><meshStandardMaterial color="#F2A0A8" roughness={0.8} /></mesh>
     </>)
-    case 'chocolate': return (<>
-      <mesh position={[0, 0, 0.26]}><boxGeometry args={[1.5, 0.03, 0.02]} /><meshStandardMaterial color="#3D1A08" roughness={0.6} /></mesh>
-      <mesh position={[0.38, 0, 0.26]}><boxGeometry args={[0.02, 1.0, 0.02]} /><meshStandardMaterial color="#3D1A08" roughness={0.6} /></mesh>
-      <mesh position={[-0.38, 0, 0.26]}><boxGeometry args={[0.02, 1.0, 0.02]} /><meshStandardMaterial color="#3D1A08" roughness={0.6} /></mesh>
-    </>)
+    case 'chocolate': return null  // bumps are baked into the merged main geometry
     default: return null
   }
 }
 
-export default function DeformableToy({ toy, onFaceChange, pendingMove }) {
+// ─── Composed toy (multi-part) ────────────────────────────────────────────────
+
+function ComposedPart({ part, face, onSquishStart, onSquishEnd, riseDuration, spawnCracks, waxed, sharedSquishesRef }) {
+  const meshRef = useRef()
+  const squishesRef = useRef([])
+  const riseRef = useRef()
+
+  const { geo, basePositions } = useMemo(() => {
+    const g = buildComposedGeo(part.baseShape ?? 'sphere')
+    const count = g.attributes.position.count
+    if (part.vertexColors?.length === count * 3) {
+      g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(part.vertexColors), 3))
+    } else {
+      g.setAttribute('color', new THREE.BufferAttribute(makeVertexColors(g, part.color ?? '#FFB0B0'), 3))
+    }
+    if (part.positions?.length === g.attributes.position.array.length) {
+      const arr = new Float32Array(part.positions)
+      g.attributes.position.array.set(arr)
+      g.attributes.position.needsUpdate = true
+      g.computeVertexNormals()
+    }
+    return { geo: g, basePositions: new Float32Array(g.attributes.position.array) }
+  }, [part.id, part.baseShape, part.positions, part.vertexColors, part.color])
+
+  useFrame(() => {
+    if (!meshRef.current) return
+    const now = performance.now()
+    const all = [...squishesRef.current, ...(sharedSquishesRef?.current ?? [])]
+    const active = all.some(s => s.held || (now - s.releaseTime) < s.duration)
+    if (!active) return
+    const posAttr = meshRef.current.geometry.attributes.position
+    const updated = accumulateSquishes(basePositions, all, now)
+    posAttr.array.set(updated); posAttr.needsUpdate = true
+    meshRef.current.geometry.computeVertexNormals()
+  })
+
+  const onPointerDown = useCallback((e) => {
+    e.stopPropagation()
+    clearTimeout(riseRef.current)
+    const scale = 1  // composed parts have no additional scale
+    const p = e.point.clone().divideScalar(scale)
+    const n = p.clone().normalize()
+    const minDepth = 0.13
+    squishesRef.current.push({
+      px: p.x, py: p.y, pz: p.z, nx: n.x, ny: n.y, nz: n.z,
+      minDepth, maxDepth: 0.34, releaseDepth: 0, radius: 0.72,
+      held: true, startTime: performance.now(), releaseTime: 0, duration: riseDuration,
+    })
+    onSquishStart?.()
+    if (waxed) {
+      spawnCracks?.(p.clone().addScaledVector(n, -minDepth), n)
+    } else {
+      playSquish()
+    }
+  }, [riseDuration, onSquishStart, spawnCracks, waxed])
+
+  const onPointerUp = useCallback(() => {
+    const now = performance.now()
+    squishesRef.current.forEach(s => {
+      if (s.held) {
+        const held = Math.min((now - s.startTime) / 700, 1)
+        s.releaseDepth = s.minDepth + (s.maxDepth - s.minDepth) * Math.pow(held, 0.45)
+        s.held = false; s.releaseTime = now
+      }
+    })
+    riseRef.current = setTimeout(() => {
+      squishesRef.current = []
+      onSquishEnd?.()
+    }, riseDuration)
+  }, [riseDuration, onSquishEnd])
+
+  return (
+    <group position={[part.transform?.x??0, part.transform?.y??0, part.transform?.z??0]} scale={part.partScale ?? 1}>
+      <mesh ref={meshRef} geometry={geo}
+        onPointerDown={onPointerDown} onPointerUp={onPointerUp} onPointerLeave={onPointerUp}>
+        <meshStandardMaterial color="white" vertexColors roughness={0.5} metalness={0.05} />
+      </mesh>
+    </group>
+  )
+}
+
+function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
+  const [face, setFace]   = useState('normal')
+  const [cracks, setCracks] = useState([])
+  const composition = toy.composition ?? []
+  const primary = composition[0]
+
+  const sharedSquishesRef = useRef([])
+  const waxedRef          = useRef(waxed)
+  const stepTimersRef     = useRef([])
+  const riseTimerRef      = useRef(null)
+  useEffect(() => { waxedRef.current = waxed }, [waxed])
+
+  const riseDuration = useMemo(() => {
+    const { tension, friction, mass } = toy.riseSpeed
+    return Math.max(1000, Math.round((mass * friction * 1200) / tension))
+  }, [toy.riseSpeed])
+
+  const spawnCracks = useCallback((point, normal) => {
+    const crack = genCracks(point, normal, riseDuration, true)
+    setCracks(prev => [...prev.slice(-2), crack])
+    playCrack()
+  }, [riseDuration])
+
+  const onSquishStart = useCallback(() => {
+    setFace('squishing'); onFaceChange?.('squishing')
+  }, [onFaceChange])
+
+  const onSquishEnd = useCallback(() => {
+    setFace('rising'); onFaceChange?.('rising')
+    setTimeout(() => { setFace('normal'); onFaceChange?.('normal') }, riseDuration)
+  }, [riseDuration, onFaceChange])
+
+  const addPress = useCallback((nx, ny, nz, { minD, maxD, radius, holdMs, growTime }) => {
+    const s = {
+      px: nx * 0.85, py: ny * 0.85, pz: nz * 0.85,
+      nx, ny, nz,
+      minDepth: minD, maxDepth: maxD,
+      releaseDepth: 0, radius,
+      held: true, startTime: performance.now(),
+      releaseTime: 0, duration: riseDuration,
+      growTime: growTime || 600,
+    }
+    sharedSquishesRef.current.push(s)
+    const t = setTimeout(() => {
+      const now = performance.now()
+      const held = Math.min((now - s.startTime) / 700, 1)
+      s.releaseDepth = s.minDepth + (s.maxDepth - s.minDepth) * Math.pow(held, 0.45)
+      s.held = false; s.releaseTime = now
+    }, holdMs)
+    stepTimersRef.current.push(t)
+  }, [riseDuration])
+
+  const scheduleRise = useCallback((delay) => {
+    const t = setTimeout(() => {
+      setFace('rising'); onFaceChange?.('rising')
+      clearTimeout(riseTimerRef.current)
+      riseTimerRef.current = setTimeout(() => {
+        sharedSquishesRef.current = []
+        setFace('normal'); onFaceChange?.('normal')
+      }, riseDuration)
+    }, delay)
+    stepTimersRef.current.push(t)
+  }, [riseDuration, onFaceChange])
+
+  useEffect(() => {
+    if (!pendingMove?.style) return
+    stepTimersRef.current.forEach(clearTimeout)
+    stepTimersRef.current = []
+    clearTimeout(riseTimerRef.current)
+    sharedSquishesRef.current = []
+
+    const style = pendingMove.style
+    setFace('squishing'); onFaceChange?.('squishing')
+    if (!waxedRef.current) playSquish()
+
+    if (style === 'poke') {
+      const [nx, ny, nz] = randDir()
+      addPress(nx, ny, nz, { minD: 0.45, maxD: 0.60, radius: 0.65, holdMs: 220, growTime: 400 })
+      if (waxedRef.current) spawnCracks(new THREE.Vector3(nx * 0.55, ny * 0.55, nz * 0.55), new THREE.Vector3(nx, ny, nz))
+      scheduleRise(240)
+
+    } else if (style === 'squeeze') {
+      const [nx, ny, nz] = randDir()
+      addPress(nx, ny, nz,    { minD: 0.38, maxD: 0.55, radius: 0.75, holdMs: 500, growTime: 450 })
+      addPress(-nx, -ny, -nz, { minD: 0.38, maxD: 0.55, radius: 0.75, holdMs: 500, growTime: 450 })
+      if (waxedRef.current) spawnCracks(new THREE.Vector3(nx * 0.62, ny * 0.62, nz * 0.62), new THREE.Vector3(nx, ny, nz))
+      scheduleRise(520)
+
+    } else if (style === 'palm') {
+      const a = Math.random() * Math.PI * 2
+      const raw = [Math.cos(a) * 0.3, 0.95, Math.sin(a) * 0.3]
+      const mag = Math.sqrt(raw[0]**2 + raw[1]**2 + raw[2]**2)
+      const [nx, ny, nz] = raw.map(v => v / mag)
+      addPress(nx, ny, nz, { minD: 0.42, maxD: 0.80, radius: 1.02, holdMs: 900, growTime: 550 })
+      if (waxedRef.current) spawnCracks(new THREE.Vector3(nx * 0.58, ny * 0.58, nz * 0.58), new THREE.Vector3(nx, ny, nz))
+      scheduleRise(920)
+
+    } else if (style === 'taps') {
+      ;[0, 220, 440].forEach(delay => {
+        const t = setTimeout(() => {
+          const [nx, ny, nz] = randDir()
+          addPress(nx, ny, nz, { minD: 0.38, maxD: 0.50, radius: 0.58, holdMs: 140, growTime: 250 })
+          if (waxedRef.current) spawnCracks(new THREE.Vector3(nx * 0.62, ny * 0.62, nz * 0.62), new THREE.Vector3(nx, ny, nz))
+        }, delay)
+        stepTimersRef.current.push(t)
+      })
+      scheduleRise(600)
+
+    } else if (style === 'knead') {
+      const dirs = [[-0.95, 0.1, 0.3], [0.95, 0.1, 0.3], [-0.88, 0.35, -0.3], [0.88, 0.35, -0.3]]
+      dirs.forEach(([nx, ny, nz], i) => {
+        const mag = Math.sqrt(nx*nx + ny*ny + nz*nz)
+        const t = setTimeout(() => {
+          addPress(nx/mag, ny/mag, nz/mag, { minD: 0.40, maxD: 0.58, radius: 0.72, holdMs: 320, growTime: 400 })
+          if (waxedRef.current) spawnCracks(new THREE.Vector3((nx/mag)*0.60, (ny/mag)*0.60, (nz/mag)*0.60), new THREE.Vector3(nx/mag, ny/mag, nz/mag))
+        }, i * 330)
+        stepTimersRef.current.push(t)
+      })
+      scheduleRise(dirs.length * 330 + 340)
+
+    } else if (style === 'pancake') {
+      addPress(0,  1, 0, { minD: 0.60, maxD: 0.92, radius: 1.08, holdMs: 800, growTime: 280 })
+      addPress(0, -1, 0, { minD: 0.60, maxD: 0.92, radius: 1.08, holdMs: 800, growTime: 280 })
+      if (waxedRef.current) {
+        spawnCracks(new THREE.Vector3(0,  0.40, 0), new THREE.Vector3(0,  1, 0))
+        spawnCracks(new THREE.Vector3(0, -0.40, 0), new THREE.Vector3(0, -1, 0))
+      }
+      scheduleRise(950)
+    }
+  }, [pendingMove?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Face position on primary part's front
+  const facePosBase = useMemo(() => {
+    if (!primary) return [0, 0.06, 1.05]
+    const fz = getFrontZ(primary.baseShape ?? 'sphere')
+    const tx = primary.transform?.x ?? 0
+    const ty = primary.transform?.y ?? 0
+    const tz = primary.transform?.z ?? 0
+    return [tx, ty + 0.06, tz + fz]
+  }, [primary])
+
+  return (
+    <group scale={toy.customScale || 1}>
+      {composition.map(part => (
+        <ComposedPart key={part.id} part={part} face={face}
+          onSquishStart={onSquishStart} onSquishEnd={onSquishEnd}
+          riseDuration={riseDuration} spawnCracks={spawnCracks} waxed={waxed}
+          sharedSquishesRef={sharedSquishesRef} />
+      ))}
+      {cracks.map((c, i) => <CrackLine key={i} crack={c} />)}
+      <group position={facePosBase}>
+        <Eye pos={[-0.22, 0.1, 0]} face={face} />
+        <Eye pos={[ 0.22, 0.1, 0]} face={face} />
+        <Mouth face={face} />
+        <mesh position={[-0.42, -0.06, -0.01]}><sphereGeometry args={[0.16, 8, 6]} /><meshStandardMaterial color="#FFB0B0" transparent opacity={0.48} roughness={1} /></mesh>
+        <mesh position={[ 0.42, -0.06, -0.01]}><sphereGeometry args={[0.16, 8, 6]} /><meshStandardMaterial color="#FFB0B0" transparent opacity={0.48} roughness={1} /></mesh>
+      </group>
+    </group>
+  )
+}
+
+// ─── Main toy router ──────────────────────────────────────────────────────────
+
+export default function DeformableToy({ toy, onFaceChange, pendingMove, waxed }) {
+  if (toy.geometry === 'composed') {
+    return <ComposedToy toy={toy} onFaceChange={onFaceChange} pendingMove={pendingMove} waxed={waxed} />
+  }
+  return <SingleDeformableToy toy={toy} onFaceChange={onFaceChange} pendingMove={pendingMove} waxed={waxed} />
+}
+
+function SingleDeformableToy({ toy, onFaceChange, pendingMove, waxed }) {
   const meshRef = useRef()
   const faceGroupRef = useRef()
   const squishesRef = useRef([])
@@ -318,16 +633,28 @@ export default function DeformableToy({ toy, onFaceChange, pendingMove }) {
   const [cracks, setCracks] = useState([])
   const riseTimerRef = useRef(null)
   const stepTimersRef = useRef([])
+  const waxedRef = useRef(waxed)
+  useEffect(() => { waxedRef.current = waxed }, [waxed])
 
   const { basePositions, geometry, frontVertexIndices, baseFaceCenter } = useMemo(() => {
     const geo = buildGeometry(toy.geometry)
+    if (toy.geometry === 'sculpted' && toy.customPositions?.length) {
+      const attr = geo.attributes.position
+      const src = new Float32Array(toy.customPositions)
+      // src may have been built at SEGS=26; if lengths match, apply directly
+      if (src.length === attr.array.length) {
+        attr.array.set(src)
+        attr.needsUpdate = true
+        geo.computeVertexNormals()
+      }
+    }
     const pos = new Float32Array(geo.attributes.position.array)
     const fvi = findFrontVertices(pos)
     let sx = 0, sy = 0, sz = 0
     for (const idx of fvi) { sx += pos[idx]; sy += pos[idx+1]; sz += pos[idx+2] }
     const n = fvi.length || 1
     return { basePositions: pos, geometry: geo, frontVertexIndices: fvi, baseFaceCenter: [sx/n, sy/n + 0.06, sz/n + 0.04] }
-  }, [toy.geometry])
+  }, [toy.geometry, toy.customPositions])
 
   useEffect(() => {
     squishesRef.current = []
@@ -385,19 +712,20 @@ export default function DeformableToy({ toy, onFaceChange, pendingMove }) {
     squishesRef.current = []
 
     const style = pendingMove.style
-    setFace('squishing'); onFaceChange?.('squishing'); playSquish()
+    setFace('squishing'); onFaceChange?.('squishing')
+    if (!waxedRef.current) playSquish()
 
     if (style === 'poke') {
       const [nx, ny, nz] = randDir()
       addPress(nx, ny, nz, { minD: 0.45, maxD: 0.60, radius: 0.65, holdMs: 220, growTime: 400 })
-      spawnCracks(new THREE.Vector3(nx * 0.85, ny * 0.85, nz * 0.85), new THREE.Vector3(nx, ny, nz))
+      if (waxedRef.current) spawnCracks(new THREE.Vector3(nx * 0.55, ny * 0.55, nz * 0.55), new THREE.Vector3(nx, ny, nz))
       scheduleRise(240)
 
     } else if (style === 'squeeze') {
       const [nx, ny, nz] = randDir()
       addPress(nx, ny, nz,    { minD: 0.38, maxD: 0.55, radius: 0.75, holdMs: 500, growTime: 450 })
       addPress(-nx, -ny, -nz, { minD: 0.38, maxD: 0.55, radius: 0.75, holdMs: 500, growTime: 450 })
-      spawnCracks(new THREE.Vector3(nx * 0.85, ny * 0.85, nz * 0.85), new THREE.Vector3(nx, ny, nz))
+      if (waxedRef.current) spawnCracks(new THREE.Vector3(nx * 0.62, ny * 0.62, nz * 0.62), new THREE.Vector3(nx, ny, nz))
       scheduleRise(520)
 
     } else if (style === 'palm') {
@@ -406,7 +734,7 @@ export default function DeformableToy({ toy, onFaceChange, pendingMove }) {
       const mag = Math.sqrt(raw[0]**2 + raw[1]**2 + raw[2]**2)
       const [nx, ny, nz] = raw.map(v => v / mag)
       addPress(nx, ny, nz, { minD: 0.42, maxD: 0.80, radius: 1.02, holdMs: 900, growTime: 550 })
-      spawnCracks(new THREE.Vector3(nx * 0.85, ny * 0.85, nz * 0.85), new THREE.Vector3(nx, ny, nz))
+      if (waxedRef.current) spawnCracks(new THREE.Vector3(nx * 0.58, ny * 0.58, nz * 0.58), new THREE.Vector3(nx, ny, nz))
       scheduleRise(920)
 
     } else if (style === 'taps') {
@@ -414,7 +742,7 @@ export default function DeformableToy({ toy, onFaceChange, pendingMove }) {
         const t = setTimeout(() => {
           const [nx, ny, nz] = randDir()
           addPress(nx, ny, nz, { minD: 0.38, maxD: 0.50, radius: 0.58, holdMs: 140, growTime: 250 })
-          spawnCracks(new THREE.Vector3(nx * 0.85, ny * 0.85, nz * 0.85), new THREE.Vector3(nx, ny, nz))
+          if (waxedRef.current) spawnCracks(new THREE.Vector3(nx * 0.62, ny * 0.62, nz * 0.62), new THREE.Vector3(nx, ny, nz))
         }, delay)
         stepTimersRef.current.push(t)
       })
@@ -426,43 +754,55 @@ export default function DeformableToy({ toy, onFaceChange, pendingMove }) {
         const mag = Math.sqrt(nx*nx + ny*ny + nz*nz)
         const t = setTimeout(() => {
           addPress(nx/mag, ny/mag, nz/mag, { minD: 0.40, maxD: 0.58, radius: 0.72, holdMs: 320, growTime: 400 })
-          spawnCracks(new THREE.Vector3((nx/mag)*0.85, (ny/mag)*0.85, (nz/mag)*0.85), new THREE.Vector3(nx/mag, ny/mag, nz/mag))
+          if (waxedRef.current) spawnCracks(new THREE.Vector3((nx/mag) * 0.60, (ny/mag) * 0.60, (nz/mag) * 0.60), new THREE.Vector3(nx/mag, ny/mag, nz/mag))
         }, i * 330)
         stepTimersRef.current.push(t)
       })
       scheduleRise(dirs.length * 330 + 340)
 
     } else if (style === 'pancake') {
-      // Two hands crush top+bottom — fast flatten, stay flat, then spring back
-      addPress(0,  1, 0, { minD: 0.60, maxD: 0.92, radius: 1.08, holdMs: 1800, growTime: 280 })
-      addPress(0, -1, 0, { minD: 0.60, maxD: 0.92, radius: 1.08, holdMs: 1800, growTime: 280 })
-      spawnCracks(new THREE.Vector3(0, 0.85, 0), new THREE.Vector3(0, 1, 0))
-      spawnCracks(new THREE.Vector3(0, -0.85, 0), new THREE.Vector3(0, -1, 0))
-      scheduleRise(1820)
+      addPress(0,  1, 0, { minD: 0.60, maxD: 0.92, radius: 1.08, holdMs: 800, growTime: 280 })
+      addPress(0, -1, 0, { minD: 0.60, maxD: 0.92, radius: 1.08, holdMs: 800, growTime: 280 })
+      if (waxedRef.current) {
+        spawnCracks(new THREE.Vector3(0,  0.40, 0), new THREE.Vector3(0,  1, 0))
+        spawnCracks(new THREE.Vector3(0, -0.40, 0), new THREE.Vector3(0, -1, 0))
+      }
+      scheduleRise(950)
     }
   }, [pendingMove?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const spawnCracks = useCallback((point, normal) => {
+    // Flat-faced toys keep the tangent-plane cracks (already flush with the face);
+    // curved toys snap cracks onto the surface so they don't float off it.
+    const curved = !['box', 'chonk', 'chocolate', 'butter'].includes(toy.geometry)
     const crack = toy.geometry === 'butter'
       ? genCraquelure(point, normal, riseDuration)
-      : genCracks(point, normal, riseDuration)
+      : genCracks(point, normal, riseDuration, curved)
     setCracks(prev => [...prev.slice(-2), crack])
     playCrack()
   }, [riseDuration, toy.geometry])
 
   // Manual pointer interaction
+  const toyScale = toy.customScale || 1
+
   const onPointerDown = useCallback((e) => {
     e.stopPropagation()
     clearTimeout(riseTimerRef.current)
-    const p = e.point, n = p.clone().normalize()
+    // e.point is world-space; convert to local-space (group is uniformly scaled)
+    const p = e.point.clone().divideScalar(toyScale), n = p.clone().normalize()
+    const minDepth = 0.13
     squishesRef.current.push({
       px: p.x, py: p.y, pz: p.z, nx: n.x, ny: n.y, nz: n.z,
-      minDepth: 0.28, maxDepth: 0.72, releaseDepth: 0, radius: 0.82,
+      minDepth, maxDepth: 0.34, releaseDepth: 0, radius: 0.72,
       held: true, startTime: performance.now(), releaseTime: 0, duration: riseDuration,
     })
-    setFace('squishing'); onFaceChange?.('squishing'); playSquish()
-    spawnCracks(p, n)
-  }, [riseDuration, onFaceChange, spawnCracks])
+    setFace('squishing'); onFaceChange?.('squishing')
+    if (waxed) {
+      spawnCracks(p.clone().addScaledVector(n, -minDepth), n)
+    } else {
+      playSquish()
+    }
+  }, [riseDuration, onFaceChange, spawnCracks, toyScale, waxed])
 
   const onPointerUp = useCallback(() => {
     const now = performance.now()
@@ -503,26 +843,27 @@ export default function DeformableToy({ toy, onFaceChange, pendingMove }) {
   const isBox = ['box', 'chonk', 'butter', 'chocolate'].includes(toy.geometry)
 
   return (
-    <group onPointerDown={onPointerDown} onPointerUp={onPointerUp} onPointerLeave={onPointerUp}>
+    <group scale={toyScale} onPointerDown={onPointerDown} onPointerUp={onPointerUp} onPointerLeave={onPointerUp}>
       <mesh ref={meshRef} geometry={geometry}>
         <meshStandardMaterial
           color={toy.color}
-          roughness={toy.geometry === 'butter' ? 0.28 : 0.46}
-          metalness={toy.geometry === 'butter' ? 0.02 : 0.06}
+          roughness={waxed ? 0.07 : toy.geometry === 'butter' ? 0.86 : toy.geometry === 'chocolate' ? 0.88 : 0.46}
+          metalness={waxed ? 0.06 : 0}
         />
       </mesh>
       <Accessories toy={toy} />
 
       {/* Wax crack lines — fade out over rise duration */}
       {cracks.map((crack, i) => <CrackLine key={i} crack={crack} />)}
-      <group ref={faceGroupRef} position={baseFaceCenter}>
-        <Eye pos={isBox ? [-0.2, 0.08, 0] : [-0.22, 0.1, 0]} face={face} />
-        <Eye pos={isBox ? [0.2, 0.08, 0] : [0.22, 0.1, 0]} face={face} />
-        <Mouth face={face} />
-        {/* Big soft blush circles — matching reference photo prominence */}
-        <mesh position={[-0.42, -0.06, -0.01]}><sphereGeometry args={[0.16, 8, 6]} /><meshStandardMaterial color={toy.blushColor || '#FFB0B0'} transparent opacity={0.48} roughness={1} /></mesh>
-        <mesh position={[0.42, -0.06, -0.01]}><sphereGeometry args={[0.16, 8, 6]} /><meshStandardMaterial color={toy.blushColor || '#FFB0B0'} transparent opacity={0.48} roughness={1} /></mesh>
-      </group>
+      {toy.geometry !== 'chocolate' && (
+        <group ref={faceGroupRef} position={baseFaceCenter}>
+          <Eye pos={isBox ? [-0.2, 0.08, 0] : [-0.22, 0.1, 0]} face={face} />
+          <Eye pos={isBox ? [0.2, 0.08, 0] : [0.22, 0.1, 0]} face={face} />
+          <Mouth face={face} />
+          <mesh position={[-0.42, -0.06, -0.01]}><sphereGeometry args={[0.16, 8, 6]} /><meshStandardMaterial color={toy.blushColor || '#FFB0B0'} transparent opacity={0.48} roughness={1} /></mesh>
+          <mesh position={[0.42, -0.06, -0.01]}><sphereGeometry args={[0.16, 8, 6]} /><meshStandardMaterial color={toy.blushColor || '#FFB0B0'} transparent opacity={0.48} roughness={1} /></mesh>
+        </group>
+      )}
     </group>
   )
 }

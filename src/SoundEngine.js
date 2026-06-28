@@ -6,24 +6,37 @@ function getCtx() {
   return ctx
 }
 
-// Press feedback only — soft foam thud ~250ms
+// Squishy foam press — soft rubbery thud + air-escape noise ~200ms
 export function playSquish() {
   try {
     const c = getCtx()
     const t = c.currentTime
+
+    // Low body thud: pitch drops like foam compressing
     const osc = c.createOscillator()
     osc.type = 'sine'
-    osc.frequency.setValueAtTime(100, t)
-    osc.frequency.exponentialRampToValueAtTime(38, t + 0.22)
-    const gain = c.createGain()
-    gain.gain.setValueAtTime(0, t)
-    gain.gain.linearRampToValueAtTime(0.32, t + 0.014)
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25)
-    const lp = c.createBiquadFilter()
-    lp.type = 'lowpass'
-    lp.frequency.value = 420
-    osc.connect(lp); lp.connect(gain); gain.connect(c.destination)
-    osc.start(t); osc.stop(t + 0.26)
+    osc.frequency.setValueAtTime(180, t)
+    osc.frequency.exponentialRampToValueAtTime(60, t + 0.12)
+    const oscGain = c.createGain()
+    oscGain.gain.setValueAtTime(0, t)
+    oscGain.gain.linearRampToValueAtTime(0.55, t + 0.010)
+    oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.20)
+    osc.connect(oscGain); oscGain.connect(c.destination)
+    osc.start(t); osc.stop(t + 0.22)
+
+    // Soft noise burst: air squeezing out of the foam
+    const nLen = Math.ceil(c.sampleRate * 0.16)
+    const nBuf = c.createBuffer(1, nLen, c.sampleRate)
+    const nd = nBuf.getChannelData(0)
+    for (let i = 0; i < nLen; i++) nd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / nLen, 1.4)
+    const noise = c.createBufferSource(); noise.buffer = nBuf
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'
+    bp.frequency.value = 380; bp.Q.value = 1.1
+    const noiseGain = c.createGain()
+    noiseGain.gain.setValueAtTime(0.28, t)
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.16)
+    noise.connect(bp); bp.connect(noiseGain); noiseGain.connect(c.destination)
+    noise.start(t)
   } catch (_) {}
 }
 

@@ -2,7 +2,8 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls, RoundedBox } from '@react-three/drei'
 
 function PreviewShape({ geometry, color }) {
-  const mat = <meshStandardMaterial color={color} roughness={0.85} metalness={0} />
+  const roughness = geometry === 'butter' || geometry === 'chocolate' ? 0.88 : 0.85
+  const mat = <meshStandardMaterial color={color} roughness={roughness} metalness={0} />
   switch (geometry) {
     case 'box':
       return <RoundedBox args={[1.4, 1.1, 1.2]} radius={0.25} smoothness={4}>{mat}</RoundedBox>
@@ -44,34 +45,34 @@ function PreviewShape({ geometry, color }) {
       )
     case 'butter':
       return (
-        <group>
-          <RoundedBox args={[1.6, 0.85, 1.0]} radius={0.12} smoothness={4}>{mat}</RoundedBox>
-          {/* Wrapper foil strip */}
-          <mesh position={[0, 0, 0]}>
-            <boxGeometry args={[1.65, 0.28, 1.05]} />
-            <meshStandardMaterial color="#E8D44D" roughness={0.4} metalness={0.3} />
-          </mesh>
-        </group>
+        // Very wide flat slab — no separate accessories, uniform cream wrapper
+        <RoundedBox args={[2.0, 0.58, 0.38]} radius={0.09} smoothness={5}>{mat}</RoundedBox>
       )
-    case 'chocolate':
+    case 'chocolate': {
+      // Flat base + 5×3 = 15 raised rounded square bumps, matching the reference squishy
+      const cols = 5, rows = 3
+      const W = 2.0, H = 1.2
+      const stepX = W / cols   // 0.40
+      const stepY = H / rows   // 0.40
+      const bumps = []
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x = -W/2 + stepX/2 + c * stepX
+          const y = -H/2 + stepY/2 + r * stepY
+          bumps.push(
+            <group key={`${r}_${c}`} position={[x, y, 0.22]}>
+              <RoundedBox args={[0.33, 0.34, 0.22]} radius={0.08} smoothness={3}>{mat}</RoundedBox>
+            </group>
+          )
+        }
+      }
       return (
         <group>
-          <RoundedBox args={[1.5, 0.7, 1.1]} radius={0.1} smoothness={4}>{mat}</RoundedBox>
-          {/* Bar segments */}
-          {[-0.38, 0, 0.38].map((x) => (
-            <mesh key={x} position={[x, 0.36, 0]}>
-              <boxGeometry args={[0.34, 0.12, 1.12]} />
-              <meshStandardMaterial color="#3B1A08" roughness={0.6} />
-            </mesh>
-          ))}
-          {[-0.38, 0, 0.38].map((x) => (
-            <mesh key={`l${x}`} position={[x, 0.36, 0]} rotation={[0, Math.PI / 2, 0]}>
-              <boxGeometry args={[0.34, 0.12, 1.52]} />
-              <meshStandardMaterial color="#3B1A08" roughness={0.6} />
-            </mesh>
-          ))}
+          <RoundedBox args={[2.0, 1.2, 0.36]} radius={0.06} smoothness={3}>{mat}</RoundedBox>
+          {bumps}
         </group>
       )
+    }
     default:
       return <mesh><sphereGeometry args={[0.85, 24, 24]} />{mat}</mesh>
   }
