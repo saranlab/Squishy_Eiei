@@ -7,6 +7,23 @@ import { COMPOSED_SHAPES, buildComposedGeo, getFrontZ, hexToRgb, makeVertexColor
 const MAX_PARTS = 3
 const DEFAULT_COLORS = ['#FFB0B0', '#B0C8FF', '#B0FFB8']
 const PAINT_SWATCHES = ['#FF3B3B','#FF9500','#FFCC00','#34C759','#007AFF','#AF52DE','#FF2D55','#5856D6','#30B0C7','#FF6B9D','#000000','#FFFFFF']
+const BASE_COLORS = ['#FFB0B0','#FFDC8C','#FFF8A0','#B0EEB8','#B0C8FF','#D8B0FF','#FFB8D8','#F5F5F5']
+
+const FACE_TYPES = [
+  { id: 'smile',     emoji: '😊', label: 'Smile' },
+  { id: 'cry',       emoji: '😢', label: 'Cry'   },
+  { id: 'dead',      emoji: '💀', label: 'Dead'  },
+  { id: 'openmouth', emoji: '😮', label: 'Open'  },
+  { id: 'none',      emoji: '⬜', label: 'None'  },
+]
+
+const SIDEBAR_ICONS = [
+  { id: 'sculpt', emoji: '✍️', title: 'Sculpt' },
+  { id: 'paint',  emoji: '🎨', title: 'Paint'  },
+  { id: 'text',   emoji: '🔤', title: 'Text'   },
+  { id: 'face',   emoji: '😊', title: 'Face'   },
+  { id: 'part',   emoji: '🧩', title: 'Parts'  },
+]
 
 // ─── brush math ──────────────────────────────────────────────────────────────
 
@@ -88,7 +105,6 @@ const PartMesh = forwardRef(({ part, isSelected, panel, brushRadius, paintColor,
   const colRef = useRef(null)
   const drag = useRef({ active: false, lastY: 0, lx: 0, ly: 0, lz: 0, nx: 0, ny: 0, nz: 0 })
 
-  // Rebuild geo when base shape or part id changes
   const geo = useMemo(() => {
     const g = buildComposedGeo(part.baseShape)
     const colors = makeVertexColors(g, part.color)
@@ -97,7 +113,6 @@ const PartMesh = forwardRef(({ part, isSelected, panel, brushRadius, paintColor,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [part.id, part.baseShape])
 
-  // Init refs from fresh geo
   useEffect(() => {
     posRef.current = new Float32Array(geo.attributes.position.array)
     colRef.current = makeVertexColors(geo, part.color)
@@ -106,7 +121,6 @@ const PartMesh = forwardRef(({ part, isSelected, panel, brushRadius, paintColor,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geo])
 
-  // When base color changes, repaint all vertices
   const prevColorRef = useRef(part.color)
   useEffect(() => {
     if (prevColorRef.current === part.color || !colRef.current || !geo) return
@@ -198,7 +212,6 @@ const PartMesh = forwardRef(({ part, isSelected, panel, brushRadius, paintColor,
         <meshStandardMaterial color="white" vertexColors roughness={0.52} metalness={0.05} />
       </mesh>
 
-      {/* Gold wireframe highlight on selected part (toggleable) */}
       {isSelected && showWireframe && (
         <mesh geometry={geo} scale={[1.035, 1.035, 1.035]}>
           <meshBasicMaterial color="#FFD700" wireframe transparent opacity={0.18} depthTest={false} />
@@ -220,11 +233,9 @@ const PartMesh = forwardRef(({ part, isSelected, panel, brushRadius, paintColor,
 })
 PartMesh.displayName = 'PartMesh'
 
-// ─── helpers for panel UI ─────────────────────────────────────────────────────
+// ─── helpers ─────────────────────────────────────────────────────────────────
 
 const LABEL = { fontSize: 10, fontWeight: 700, color: '#A07040', letterSpacing: '0.1em', textTransform: 'uppercase', display: 'block', marginBottom: 5 }
-
-// ─── SculptStudio (main export) ───────────────────────────────────────────────
 
 function partSizeLabel(s) {
   if (s <= 0.45) return 'XS'
@@ -234,21 +245,11 @@ function partSizeLabel(s) {
   return 'XL'
 }
 
-const SIDEBAR_ICONS = [
-  { id: 'sculpt',   emoji: '✍️', title: 'Sculpt'    },
-  { id: 'paint',    emoji: '🎨', title: 'Paint'     },
-  { id: 'text',     emoji: '🔤', title: 'Text'      },
-  { id: 'add',      emoji: '➕', title: 'Add Part'  },
-  { id: 'position', emoji: '📐', title: 'Position'  },
-  { id: 'color',    emoji: '🖌️', title: 'Color'     },
-  { id: 'size',     emoji: '⚖️', title: 'Size'      },
-]
-
 function mkPart(idx) {
   return { id: `p${idx}_${Date.now()}`, baseShape: 'sphere', color: DEFAULT_COLORS[idx % 3], textLabel: '', textColor: '#1A1A1A', textSize: 1.0, textOffsetX: 0, textOffsetY: 0, partScale: 1.0, transform: { x: 0, y: 0, z: 0 } }
 }
 
-// ─── face preview components (canvas-only, no squish animation) ───────────────
+// ─── face preview ─────────────────────────────────────────────────────────────
 
 function PreviewEye({ pos, expression }) {
   if (expression === 'dead') {
@@ -351,7 +352,9 @@ function FaceOverlay({ parts, faceExpression, faceAngle, faceElevation, faceOffs
   )
 }
 
-const SculptStudio = forwardRef(({ faceExpression = 'smile', faceAngle = 0, faceElevation = 0, faceOffsetX = 0, faceOffsetY = 0, facePieceIndex = 0 }, ref) => {
+// ─── SculptStudio ─────────────────────────────────────────────────────────────
+
+const SculptStudio = forwardRef((props, ref) => {
   const [parts, setParts] = useState(() => [mkPart(0)])
   const [selectedId, setSelectedId] = useState(() => parts[0].id)
   const [panel, setPanel] = useState('sculpt')
@@ -359,12 +362,21 @@ const SculptStudio = forwardRef(({ faceExpression = 'smile', faceAngle = 0, face
   const [brushRadius, setBrushRadius] = useState(0.35)
   const [paintColor, setPaintColor] = useState('#FF3B3B')
 
+  // Face state — managed internally, exposed via getFaceSettings()
+  const [faceExpression, setFaceExpression] = useState('smile')
+  const [faceAngle,      setFaceAngle]      = useState(0)
+  const [faceElevation,  setFaceElevation]  = useState(0)
+  const [faceOffsetX,    setFaceOffsetX]    = useState(0)
+  const [faceOffsetY,    setFaceOffsetY]    = useState(0)
+  const [facePieceIndex, setFacePieceIndex] = useState(0)
+
   const orbitRef = useRef()
-  const partRefs = useRef({})   // id → { getData, resetSculpt, resetPaint }
+  const partRefs = useRef({})
 
   useImperativeHandle(ref, () => ({
-    getComposition: () => parts.map(p => ({ ...p, ...(partRefs.current[p.id]?.getData() ?? {}) }))
-  }), [parts])
+    getComposition: () => parts.map(p => ({ ...p, ...(partRefs.current[p.id]?.getData() ?? {}) })),
+    getFaceSettings: () => ({ faceExpression, faceAngle, faceElevation, faceOffsetX, faceOffsetY, facePieceIndex }),
+  }), [parts, faceExpression, faceAngle, faceElevation, faceOffsetX, faceOffsetY, facePieceIndex])
 
   const selectedPart = parts.find(p => p.id === selectedId) ?? parts[0]
 
@@ -391,8 +403,6 @@ const SculptStudio = forwardRef(({ faceExpression = 'smile', faceAngle = 0, face
     updatePart(selectedId, { transform: { ...selectedPart.transform, [axis]: val } })
   }, [selectedId, selectedPart, updatePart])
 
-  const BASE_COLORS = ['#FFB0B0','#FFDC8C','#FFF8A0','#B0EEB8','#B0C8FF','#D8B0FF','#FFB8D8','#F5F5F5']
-
   const iconBtn = (id) => ({
     width: 30, height: 30, borderRadius: 9, cursor: 'pointer', padding: 0, fontSize: 14,
     border: panel === id ? '2px solid #C68B4A' : '2px solid #E8D8C0',
@@ -401,6 +411,7 @@ const SculptStudio = forwardRef(({ faceExpression = 'smile', faceAngle = 0, face
   })
 
   const panelBox = { marginBottom: 8, background: '#FFF9F0', borderRadius: 10, padding: '8px 10px', border: '1.5px solid #E8D8C0' }
+  const btnReset = { fontSize: 9, padding: '1px 5px', borderRadius: 5, border: '1px solid #DDD', background: 'white', color: '#A07040', cursor: 'pointer' }
 
   return (
     <div style={{ fontFamily: "'Nunito', sans-serif" }}>
@@ -428,7 +439,15 @@ const SculptStudio = forwardRef(({ faceExpression = 'smile', faceAngle = 0, face
                 showWireframe={showWireframe}
               />
             ))}
-            <FaceOverlay parts={parts} faceExpression={faceExpression} faceAngle={faceAngle} faceElevation={faceElevation} faceOffsetX={faceOffsetX} faceOffsetY={faceOffsetY} facePieceIndex={facePieceIndex} />
+            <FaceOverlay
+              parts={parts}
+              faceExpression={faceExpression}
+              faceAngle={faceAngle}
+              faceElevation={faceElevation}
+              faceOffsetX={faceOffsetX}
+              faceOffsetY={faceOffsetY}
+              facePieceIndex={facePieceIndex}
+            />
             <OrbitControls ref={orbitRef} enableZoom={false} enablePan={false} />
           </Canvas>
         </div>
@@ -440,7 +459,6 @@ const SculptStudio = forwardRef(({ faceExpression = 'smile', faceAngle = 0, face
               {ico.emoji}
             </button>
           ))}
-          {/* Wireframe toggle — visually distinct from panel buttons */}
           <div style={{ marginTop: 6, borderTop: '1.5px solid #E8D8C0', paddingTop: 5 }}>
             <button
               onClick={() => setShowWireframe(w => !w)}
@@ -559,13 +577,13 @@ const SculptStudio = forwardRef(({ faceExpression = 'smile', faceAngle = 0, face
             <span style={{ fontSize: 10, color: '#B09070', minWidth: 24 }}>{((selectedPart.textSize ?? 1.0) * 100).toFixed(0)}%</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#E04040', width: 34, flexShrink: 0 }}>X</span>
+            <span style={{ fontSize: 10, fontWeight: 800, color: '#E04040', width: 34, flexShrink: 0 }}>X</span>
             <input type="range" min={-0.6} max={0.6} step={0.05} value={selectedPart.textOffsetX ?? 0}
               onChange={e => updatePart(selectedId, { textOffsetX: +e.target.value })} style={{ flex: 1, accentColor: '#E04040' }} />
             <span style={{ fontSize: 10, color: '#B09070', minWidth: 28 }}>{(selectedPart.textOffsetX ?? 0).toFixed(2)}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#208820', width: 34, flexShrink: 0 }}>Y</span>
+            <span style={{ fontSize: 10, fontWeight: 800, color: '#208820', width: 34, flexShrink: 0 }}>Y</span>
             <input type="range" min={-0.6} max={0.6} step={0.05} value={selectedPart.textOffsetY ?? 0}
               onChange={e => updatePart(selectedId, { textOffsetY: +e.target.value })} style={{ flex: 1, accentColor: '#208820' }} />
             <span style={{ fontSize: 10, color: '#B09070', minWidth: 28 }}>{(selectedPart.textOffsetY ?? 0).toFixed(2)}</span>
@@ -573,46 +591,109 @@ const SculptStudio = forwardRef(({ faceExpression = 'smile', faceAngle = 0, face
         </div>
       )}
 
-      {/* ── Add panel ── */}
-      {panel === 'add' && (
+      {/* ── Face panel ── */}
+      {panel === 'face' && (
         <div style={panelBox}>
-          <span style={LABEL}>Add Part</span>
-          {parts.length < MAX_PARTS ? (
-            <button onClick={addPart} style={{ width: '100%', padding: '10px', borderRadius: 10, border: '2px dashed #C68B4A', background: 'white', cursor: 'pointer', fontFamily: "'Fredoka One', cursive", fontSize: 14, color: '#7A4A18' }}>
-              ➕ Add Another Part
-            </button>
-          ) : (
-            <div style={{ textAlign: 'center', fontSize: 11, color: '#C8A070', padding: '6px 0' }}>Max {MAX_PARTS} parts reached</div>
+          {parts.length > 1 && (
+            <>
+              <span style={LABEL}>Face on Piece</span>
+              <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
+                {parts.map((p, i) => (
+                  <button key={p.id} onClick={() => setFacePieceIndex(i)} style={{
+                    flex: 1, padding: '5px 3px', borderRadius: 8, cursor: 'pointer',
+                    border: facePieceIndex === i ? '2px solid #C68B4A' : '2px solid #E8D8C0',
+                    background: facePieceIndex === i ? '#FFF0D8' : 'white',
+                    fontFamily: "'Fredoka One', cursive", fontSize: 12,
+                    color: facePieceIndex === i ? '#7A4A18' : '#B09070',
+                  }}>Piece {i + 1}</button>
+                ))}
+              </div>
+            </>
           )}
-        </div>
-      )}
 
-      {/* ── Position panel ── */}
-      {panel === 'position' && selectedPart && (
-        <div style={panelBox}>
-          <span style={LABEL}>Position (X · Y · Z)</span>
-          {['x','y','z'].map(axis => (
-            <div key={axis} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
-              <span style={{ fontSize: 10, fontWeight: 800, color: axis==='x'?'#E04040':axis==='y'?'#208820':'#3060D0', width: 14 }}>{axis.toUpperCase()}</span>
-              <input type="range" min={-2} max={2} step={0.05}
-                value={selectedPart.transform[axis]}
-                onChange={e => setTransform(axis, +e.target.value)}
-                style={{ flex: 1, accentColor: axis==='x'?'#E04040':axis==='y'?'#208820':'#3060D0' }}
-              />
-              <span style={{ fontSize: 10, color: '#B09070', minWidth: 32, textAlign: 'right' }}>{selectedPart.transform[axis].toFixed(2)}</span>
+          <span style={LABEL}>Expression</span>
+          <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
+            {FACE_TYPES.map(f => (
+              <button key={f.id} onClick={() => setFaceExpression(f.id)} style={{
+                flex: 1, padding: '5px 2px', borderRadius: 8, cursor: 'pointer',
+                border: faceExpression===f.id ? '2px solid #C68B4A' : '2px solid #E8D8C0',
+                background: faceExpression===f.id ? '#FFF0D8' : 'white',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+              }}>
+                <span style={{ fontSize: 15 }}>{f.emoji}</span>
+                <span style={{ fontSize: 7, color: '#A07040', fontWeight: 700 }}>{f.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {faceExpression !== 'none' && (<>
+            <span style={LABEL}>Rotate</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <input type="range" min={0} max={359} step={1} value={faceAngle}
+                onChange={e => setFaceAngle(+e.target.value)}
+                style={{ flex: 1, accentColor: '#C68B4A' }} />
+              <span style={{ fontSize: 10, color: '#C68B4A', fontWeight: 700, minWidth: 30, textAlign: 'right' }}>{faceAngle}°</span>
+              <button onClick={() => setFaceAngle(0)} style={btnReset}>↺</button>
             </div>
-          ))}
-          <button onClick={() => updatePart(selectedId, { transform: { x: 0, y: 0, z: 0 } })}
-            style={{ marginTop: 4, width: '100%', padding: '3px', fontSize: 9, borderRadius: 6, border: '1.5px solid #E8D8C0', background: 'white', color: '#A07040', cursor: 'pointer' }}>
-            Reset Position
-          </button>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 10, paddingLeft: 2 }}>
+              {[['0','Front'],['90','Right'],['180','Back'],['270','Left']].map(([deg, lbl]) => (
+                <button key={deg} onClick={() => setFaceAngle(+deg)} style={{
+                  fontSize: 8, color: '#A07040', background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                }}>{lbl}</button>
+              ))}
+            </div>
+
+            <span style={LABEL}>Tilt</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <input type="range" min={-90} max={90} step={1} value={faceElevation}
+                onChange={e => setFaceElevation(+e.target.value)}
+                style={{ flex: 1, accentColor: '#C68B4A' }} />
+              <span style={{ fontSize: 10, color: '#C68B4A', fontWeight: 700, minWidth: 30, textAlign: 'right' }}>{faceElevation}°</span>
+              <button onClick={() => setFaceElevation(0)} style={btnReset}>↺</button>
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 10, paddingLeft: 2 }}>
+              {[['-90','Bottom'],['0','Middle'],['90','Top']].map(([deg, lbl]) => (
+                <button key={deg} onClick={() => setFaceElevation(+deg)} style={{
+                  fontSize: 8, color: '#A07040', background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                }}>{lbl}</button>
+              ))}
+            </div>
+
+            <span style={LABEL}>Fine Adjust</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#E04040', width: 12, flexShrink: 0 }}>X</span>
+              <input type="range" min={-0.8} max={0.8} step={0.05} value={faceOffsetX}
+                onChange={e => setFaceOffsetX(+e.target.value)} style={{ flex: 1, accentColor: '#E04040' }} />
+              <span style={{ fontSize: 10, color: '#B09070', minWidth: 32, textAlign: 'right' }}>{faceOffsetX.toFixed(2)}</span>
+              <button onClick={() => setFaceOffsetX(0)} style={btnReset}>↺</button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#208820', width: 12, flexShrink: 0 }}>Y</span>
+              <input type="range" min={-0.8} max={0.8} step={0.05} value={faceOffsetY}
+                onChange={e => setFaceOffsetY(+e.target.value)} style={{ flex: 1, accentColor: '#208820' }} />
+              <span style={{ fontSize: 10, color: '#B09070', minWidth: 32, textAlign: 'right' }}>{faceOffsetY.toFixed(2)}</span>
+              <button onClick={() => setFaceOffsetY(0)} style={btnReset}>↺</button>
+            </div>
+          </>)}
         </div>
       )}
 
-      {/* ── Color + Shape panel ── */}
-      {panel === 'color' && selectedPart && (
+      {/* ── Parts panel (add + shape + color + size + position) ── */}
+      {panel === 'part' && selectedPart && (
         <div style={panelBox}>
-          <span style={LABEL}>Base Shape</span>
+          {/* Add button */}
+          <div style={{ marginBottom: 10 }}>
+            {parts.length < MAX_PARTS ? (
+              <button onClick={addPart} style={{ width: '100%', padding: '8px', borderRadius: 10, border: '2px dashed #C68B4A', background: 'white', cursor: 'pointer', fontFamily: "'Fredoka One', cursive", fontSize: 13, color: '#7A4A18' }}>
+                ➕ Add Another Part
+              </button>
+            ) : (
+              <div style={{ textAlign: 'center', fontSize: 11, color: '#C8A070', padding: '4px 0' }}>Max {MAX_PARTS} parts reached</div>
+            )}
+          </div>
+
+          {/* Shape */}
+          <span style={LABEL}>Shape</span>
           <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
             {COMPOSED_SHAPES.map(s => (
               <button key={s.id} onClick={() => updatePart(selectedId, { baseShape: s.id })} style={{
@@ -622,45 +703,63 @@ const SculptStudio = forwardRef(({ faceExpression = 'smile', faceAngle = 0, face
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
               }}>
                 <span style={{ fontSize: 15 }}>{s.emoji}</span>
-                <span style={{ fontSize: 8, color: '#A07040', fontWeight: 700 }}>{s.label}</span>
+                <span style={{ fontSize: 7, color: '#A07040', fontWeight: 700 }}>{s.label}</span>
               </button>
             ))}
           </div>
-          <span style={LABEL}>Base Color</span>
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+
+          {/* Color */}
+          <span style={LABEL}>Color</span>
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10 }}>
             {BASE_COLORS.map(c => (
               <button key={c} onClick={() => updatePart(selectedId, { color: c })} style={{
-                width: 25, height: 25, borderRadius: '50%', background: c, cursor: 'pointer',
+                width: 24, height: 24, borderRadius: '50%', background: c, cursor: 'pointer',
                 border: selectedPart.color===c ? '3px solid #7A4A18' : '2px solid #E8D8C0',
               }} />
             ))}
             <label style={{ position: 'relative', cursor: 'pointer' }}>
-              <div style={{ width: 25, height: 25, borderRadius: '50%', background: 'conic-gradient(red,yellow,lime,cyan,blue,magenta,red)', border: '2px solid #E8D8C0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>+</div>
+              <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'conic-gradient(red,yellow,lime,cyan,blue,magenta,red)', border: '2px solid #E8D8C0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>+</div>
               <input type="color" value={selectedPart.color} onChange={e => updatePart(selectedId, { color: e.target.value })} style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} />
             </label>
           </div>
-        </div>
-      )}
 
-      {/* ── Size panel ── */}
-      {panel === 'size' && selectedPart && (
-        <div style={panelBox}>
+          {/* Size */}
           <span style={LABEL}>
             Size — <span style={{ fontWeight: 900, color: '#C68B4A' }}>{partSizeLabel(selectedPart.partScale ?? 1)}</span>
           </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <span style={{ fontSize: 10, color: '#C8A070' }}>XS</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            <span style={{ fontSize: 9, color: '#C8A070' }}>XS</span>
             <input type="range" min={0.3} max={2.0} step={0.05}
               value={selectedPart.partScale ?? 1}
               onChange={e => updatePart(selectedId, { partScale: +e.target.value })}
-              style={{ flex: 1, accentColor: '#C68B4A' }}
-            />
-            <span style={{ fontSize: 10, color: '#C8A070' }}>XL</span>
+              style={{ flex: 1, accentColor: '#C68B4A' }} />
+            <span style={{ fontSize: 9, color: '#C8A070' }}>XL</span>
           </div>
-          <button onClick={() => updatePart(selectedId, { partScale: 1.0 })}
-            style={{ width: '100%', padding: '3px', fontSize: 9, borderRadius: 6, border: '1.5px solid #E8D8C0', background: 'white', color: '#A07040', cursor: 'pointer' }}>
-            Reset Size
-          </button>
+
+          {/* Position */}
+          <span style={LABEL}>Position</span>
+          {['x','y','z'].map(axis => (
+            <div key={axis} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: axis==='x'?'#E04040':axis==='y'?'#208820':'#3060D0', width: 12 }}>{axis.toUpperCase()}</span>
+              <input type="range" min={-2} max={2} step={0.05}
+                value={selectedPart.transform[axis]}
+                onChange={e => setTransform(axis, +e.target.value)}
+                style={{ flex: 1, accentColor: axis==='x'?'#E04040':axis==='y'?'#208820':'#3060D0' }} />
+              <span style={{ fontSize: 9, color: '#B09070', minWidth: 28, textAlign: 'right' }}>{selectedPart.transform[axis].toFixed(2)}</span>
+            </div>
+          ))}
+
+          {/* Reset buttons */}
+          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+            <button onClick={() => updatePart(selectedId, { partScale: 1.0 })}
+              style={{ flex: 1, padding: '3px', fontSize: 9, borderRadius: 6, border: '1.5px solid #E8D8C0', background: 'white', color: '#A07040', cursor: 'pointer' }}>
+              Reset Size
+            </button>
+            <button onClick={() => updatePart(selectedId, { transform: { x: 0, y: 0, z: 0 } })}
+              style={{ flex: 1, padding: '3px', fontSize: 9, borderRadius: 6, border: '1.5px solid #E8D8C0', background: 'white', color: '#A07040', cursor: 'pointer' }}>
+              Reset Pos
+            </button>
+          </div>
         </div>
       )}
 

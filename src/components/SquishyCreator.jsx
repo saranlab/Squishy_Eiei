@@ -54,16 +54,12 @@ export default function SquishyCreator({ onAdd, onClose }) {
   const [speed,          setSpeed]          = useState('slow')
   const [name,           setName]           = useState('')
   const [faceExpression, setFaceExpression] = useState('smile')
-  const [faceAngle,      setFaceAngle]      = useState(0)
-  const [faceElevation,  setFaceElevation]  = useState(0)
-  const [faceOffsetX,    setFaceOffsetX]    = useState(0)
-  const [faceOffsetY,    setFaceOffsetY]    = useState(0)
-  const [facePieceIndex, setFacePieceIndex] = useState(0)
   const studioRef = useRef()
 
   function handleAdd() {
     if (mode === 'sculpt') {
       const composition = studioRef.current?.getComposition() ?? []
+      const face = studioRef.current?.getFaceSettings() ?? {}
       onAdd({
         id:          `custom_${Date.now()}`,
         name:        name.trim() || 'My Squishy',
@@ -74,12 +70,7 @@ export default function SquishyCreator({ onAdd, onClose }) {
         riseSpeed:   SPEED_PRESETS[speed],
         color:       composition[0]?.color ?? '#FF9090',
         colorDark:   darken(composition[0]?.color ?? '#FF9090'),
-        faceExpression,
-        faceAngle,
-        faceElevation,
-        faceOffsetX,
-        faceOffsetY,
-        facePieceIndex,
+        ...face,
       })
     } else {
       const shapeEmoji = CREATOR_SHAPES.find(s => s.id === shape)?.emoji ?? '🫧'
@@ -208,85 +199,7 @@ export default function SquishyCreator({ onAdd, onClose }) {
               </div>
             </div>
           </div>
-          <SculptStudio ref={studioRef} faceExpression={faceExpression} faceAngle={faceAngle} faceElevation={faceElevation} faceOffsetX={faceOffsetX} faceOffsetY={faceOffsetY} facePieceIndex={facePieceIndex} />
-
-          <div style={{ background: '#FFF4E8', borderRadius: 14, padding: '12px 14px', marginTop: 10, border: '1.5px solid #F0D8B0' }}>
-            <label style={{ ...LABEL, marginBottom: 8 }}>🎯 Face on Piece</label>
-            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-              {[0, 1, 2].map(i => (
-                <button key={i} onClick={() => setFacePieceIndex(i)} style={{
-                  flex: 1, padding: '6px 4px', borderRadius: 9,
-                  border: facePieceIndex === i ? '2px solid #C68B4A' : '2px solid #E8D8C0',
-                  background: facePieceIndex === i ? '#FFF0D8' : 'white',
-                  cursor: 'pointer', fontFamily: "'Fredoka One', cursive",
-                  fontSize: 13, color: facePieceIndex === i ? '#7A4A18' : '#B09070',
-                }}>Piece {i + 1}</button>
-              ))}
-            </div>
-            <label style={{ ...LABEL, marginBottom: 10 }}>😊 Face Expression</label>
-            <div style={{ display: 'flex', gap: 6, marginBottom: faceExpression !== 'none' ? 12 : 0 }}>
-              {FACE_TYPES.map(f => (
-                <button key={f.id} onClick={() => setFaceExpression(f.id)} style={{
-                  flex: 1, padding: '6px 2px', borderRadius: 9,
-                  border: faceExpression===f.id ? '2px solid #C68B4A' : '2px solid #E8D8C0',
-                  background: faceExpression===f.id ? '#FFF0D8' : 'white',
-                  cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                }}>
-                  <span style={{ fontSize: 18 }}>{f.emoji}</span>
-                  <span style={{ fontSize: 8, color: '#A07040', fontWeight: 700 }}>{f.label}</span>
-                </button>
-              ))}
-            </div>
-            {faceExpression !== 'none' && (<>
-              <label style={{ ...LABEL, marginBottom: 6 }}>🔄 Rotate Around Body</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <span style={{ fontSize: 9, color: '#B09070', width: 22, textAlign: 'center', flexShrink: 0 }}>F</span>
-                <input type="range" min={0} max={359} step={1} value={faceAngle}
-                  onChange={e => setFaceAngle(+e.target.value)}
-                  style={{ flex: 1, accentColor: '#C68B4A' }} />
-                <span style={{ fontSize: 9, color: '#B09070', width: 22, textAlign: 'center', flexShrink: 0 }}>F</span>
-                <span style={{ fontSize: 10, color: '#C68B4A', fontWeight: 700, minWidth: 36, textAlign: 'right' }}>{faceAngle}°</span>
-                <button onClick={() => setFaceAngle(0)} style={{ fontSize: 9, padding: '1px 5px', borderRadius: 5, border: '1px solid #DDD', background: 'white', color: '#A07040', cursor: 'pointer' }}>↺</button>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, paddingLeft: 30, paddingRight: 70 }}>
-                {[['0','Front'],['90','Right'],['180','Back'],['270','Left']].map(([deg, lbl]) => (
-                  <button key={deg} onClick={() => setFaceAngle(+deg)} style={{
-                    fontSize: 8, color: '#A07040', background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                  }}>{lbl}</button>
-                ))}
-              </div>
-              <label style={{ ...LABEL, marginBottom: 6 }}>↕️ Tilt Up / Down</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 9, color: '#B09070', width: 22, textAlign: 'center', flexShrink: 0 }}>Bot</span>
-                <input type="range" min={-90} max={90} step={1} value={faceElevation}
-                  onChange={e => setFaceElevation(+e.target.value)}
-                  style={{ flex: 1, accentColor: '#C68B4A' }} />
-                <span style={{ fontSize: 9, color: '#B09070', width: 22, textAlign: 'center', flexShrink: 0 }}>Top</span>
-                <span style={{ fontSize: 10, color: '#C68B4A', fontWeight: 700, minWidth: 36, textAlign: 'right' }}>{faceElevation}°</span>
-                <button onClick={() => setFaceElevation(0)} style={{ fontSize: 9, padding: '1px 5px', borderRadius: 5, border: '1px solid #DDD', background: 'white', color: '#A07040', cursor: 'pointer' }}>↺</button>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, paddingLeft: 30, paddingRight: 70 }}>
-                {[['-90','Bottom'],['0','Middle'],['90','Top']].map(([deg, lbl]) => (
-                  <button key={deg} onClick={() => setFaceElevation(+deg)} style={{
-                    fontSize: 8, color: '#A07040', background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                  }}>{lbl}</button>
-                ))}
-              </div>
-              <label style={{ ...LABEL, marginBottom: 6 }}>📍 Fine Adjust</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: '#E04040', width: 14, flexShrink: 0 }}>X</span>
-                <input type="range" min={-0.8} max={0.8} step={0.05} value={faceOffsetX} onChange={e => setFaceOffsetX(+e.target.value)} style={{ flex: 1, accentColor: '#E04040' }} />
-                <span style={{ fontSize: 10, color: '#B09070', minWidth: 34, textAlign: 'right' }}>{faceOffsetX.toFixed(2)}</span>
-                <button onClick={() => setFaceOffsetX(0)} style={{ fontSize: 9, padding: '1px 5px', borderRadius: 5, border: '1px solid #DDD', background: 'white', color: '#A07040', cursor: 'pointer' }}>↺</button>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: '#208820', width: 14, flexShrink: 0 }}>Y</span>
-                <input type="range" min={-0.8} max={0.8} step={0.05} value={faceOffsetY} onChange={e => setFaceOffsetY(+e.target.value)} style={{ flex: 1, accentColor: '#208820' }} />
-                <span style={{ fontSize: 10, color: '#B09070', minWidth: 34, textAlign: 'right' }}>{faceOffsetY.toFixed(2)}</span>
-                <button onClick={() => setFaceOffsetY(0)} style={{ fontSize: 9, padding: '1px 5px', borderRadius: 5, border: '1px solid #DDD', background: 'white', color: '#A07040', cursor: 'pointer' }}>↺</button>
-              </div>
-            </>)}
-          </div>
+          <SculptStudio ref={studioRef} />
         </>)}
 
         <button onClick={handleAdd}

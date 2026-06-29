@@ -508,7 +508,14 @@ function buildMergedComposedGeo(composition) {
   computeWeldedNormals(out)
   const baseNormals = out.attributes.normal.array.slice()
   const vertexGroups = buildVertexGroups(posArr)
-  return { geo: out, basePositions: posArr, baseNormals, vertexGroups }
+  // Bounding radius — used to auto-fit the toy into the camera view
+  let maxR2 = 0
+  for (let i = 0; i < posArr.length; i += 3) {
+    const x = posArr[i], y = posArr[i+1], z = posArr[i+2]
+    maxR2 = Math.max(maxR2, x*x + y*y + z*z)
+  }
+  const boundingRadius = Math.sqrt(maxR2) || 1
+  return { geo: out, basePositions: posArr, baseNormals, vertexGroups, boundingRadius }
 }
 
 function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
@@ -526,7 +533,7 @@ function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
   const composition = toy.composition ?? []
   const primary     = composition[toy.facePieceIndex ?? 0] ?? composition[0]
 
-  const { geo: mergedGeo, basePositions, baseNormals, vertexGroups } = useMemo(
+  const { geo: mergedGeo, basePositions, baseNormals, vertexGroups, boundingRadius } = useMemo(
     () => buildMergedComposedGeo(composition),
     [toy.id] // eslint-disable-line react-hooks/exhaustive-deps
   )
@@ -692,12 +699,15 @@ function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
     }
   }, [pendingMove?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const toyScale = toy.customScale || 1
+  // toyScaleRef tracks current auto-fit scale; updated every frame so it always matches
+  // the actual camera distance (handles camera moves from ResponsiveCamera / resize events)
+  const toyScaleRef = useRef((toy.customScale || 1) * Math.min(1.0, 1.1 / boundingRadius))
+  const groupRef    = useRef()
 
   const onPointerDown = useCallback((e) => {
     e.stopPropagation()
     clearTimeout(riseTimerRef.current)
-    const p = e.point.clone().divideScalar(toyScale)
+    const p = e.point.clone().divideScalar(toyScaleRef.current)
     const n = p.clone().normalize()
     const minDepth = 0.13
     squishesRef.current.push({
@@ -708,7 +718,7 @@ function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
     setFace('squishing'); onFaceChange?.('squishing')
     if (waxed) spawnCracks(p.clone().addScaledVector(n, -minDepth), n)
     else playSquish()
-  }, [riseDuration, onFaceChange, spawnCracks, waxed, toyScale])
+  }, [riseDuration, onFaceChange, spawnCracks, waxed])
 
   const onPointerUp = useCallback(() => {
     const now = performance.now()
@@ -727,8 +737,18 @@ function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
     }, riseDuration)
   }, [riseDuration, onFaceChange])
 
-  useFrame(() => {
+  useFrame(({ camera }) => {
     if (!meshRef.current) return
+
+    // Keep toy filling the same visual proportion regardless of camera distance
+    const halfFov = (camera.fov / 2) * Math.PI / 180
+    const dist = camera.position.length()
+    const newScale = (toy.customScale || 1) * Math.min(1.0, dist * Math.tan(halfFov) * 0.75 / boundingRadius)
+    if (groupRef.current && Math.abs(newScale - toyScaleRef.current) > 0.001) {
+      toyScaleRef.current = newScale
+      groupRef.current.scale.setScalar(newScale)
+    }
+
     const now = performance.now()
     const active = squishesRef.current.some(s => s.held || (now - s.releaseTime) < s.duration)
     if (active) {
@@ -765,7 +785,7 @@ function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
   })
 
   return (
-    <group scale={toyScale}
+    <group ref={groupRef} scale={toyScaleRef.current}
       onPointerDown={onPointerDown} onPointerUp={onPointerUp} onPointerLeave={onPointerUp}>
       <mesh ref={meshRef} geometry={mergedGeo}>
         <meshStandardMaterial color="white" vertexColors
