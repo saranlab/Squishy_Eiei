@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 
 // Shared segment counts — must match between SculptStudio and DeformableToy
-export const CS = 22  // composed shape segments
+export const CS = 32  // composed shape segments
 
 export const COMPOSED_SHAPES = [
   { id: 'sphere',    emoji: '⚫', label: 'Circle',    frontZ: 1.04, build: () => new THREE.SphereGeometry(1, CS, CS) },

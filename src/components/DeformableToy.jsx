@@ -518,7 +518,7 @@ function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
   useEffect(() => { waxedRef.current = waxed }, [waxed])
 
   const composition = toy.composition ?? []
-  const primary     = composition[0]
+  const primary     = composition[toy.facePieceIndex ?? 0] ?? composition[0]
 
   const { geo: mergedGeo, basePositions } = useMemo(
     () => buildMergedComposedGeo(composition),

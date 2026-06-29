@@ -113,6 +113,13 @@ export function hasLiked(postId) {
   return getLikedSet().has(postId)
 }
 
+export function setLikedLocal(postId, isLiked) {
+  const s = getLikedSet()
+  if (isLiked) s.add(postId)
+  else s.delete(postId)
+  saveLikedSet(s)
+}
+
 export function incrementPlay(postId) {
   const posts = getRaw()
   const post  = posts.find(p => p.id === postId)

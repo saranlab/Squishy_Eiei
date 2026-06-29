@@ -304,8 +304,8 @@ function PreviewMouth({ expression }) {
   return <mesh geometry={tubeGeo}><meshStandardMaterial color="#111" roughness={0.4} /></mesh>
 }
 
-function FaceOverlay({ parts, faceExpression, faceAngle, faceElevation, faceOffsetX, faceOffsetY }) {
-  const primary = parts[0]
+function FaceOverlay({ parts, faceExpression, faceAngle, faceElevation, faceOffsetX, faceOffsetY, facePieceIndex = 0 }) {
+  const primary = parts[facePieceIndex] ?? parts[0]
   if (!primary || !faceExpression || faceExpression === 'none') return null
 
   const fz  = getFrontZ(primary.baseShape ?? 'sphere') * (primary.partScale ?? 1)
@@ -351,7 +351,7 @@ function FaceOverlay({ parts, faceExpression, faceAngle, faceElevation, faceOffs
   )
 }
 
-const SculptStudio = forwardRef(({ faceExpression = 'smile', faceAngle = 0, faceElevation = 0, faceOffsetX = 0, faceOffsetY = 0 }, ref) => {
+const SculptStudio = forwardRef(({ faceExpression = 'smile', faceAngle = 0, faceElevation = 0, faceOffsetX = 0, faceOffsetY = 0, facePieceIndex = 0 }, ref) => {
   const [parts, setParts] = useState(() => [mkPart(0)])
   const [selectedId, setSelectedId] = useState(() => parts[0].id)
   const [panel, setPanel] = useState('sculpt')
@@ -428,7 +428,7 @@ const SculptStudio = forwardRef(({ faceExpression = 'smile', faceAngle = 0, face
                 showWireframe={showWireframe}
               />
             ))}
-            <FaceOverlay parts={parts} faceExpression={faceExpression} faceAngle={faceAngle} faceElevation={faceElevation} faceOffsetX={faceOffsetX} faceOffsetY={faceOffsetY} />
+            <FaceOverlay parts={parts} faceExpression={faceExpression} faceAngle={faceAngle} faceElevation={faceElevation} faceOffsetX={faceOffsetX} faceOffsetY={faceOffsetY} facePieceIndex={facePieceIndex} />
             <OrbitControls ref={orbitRef} enableZoom={false} enablePan={false} />
           </Canvas>
         </div>

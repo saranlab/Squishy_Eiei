@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   fetchPosts, submitPost, remoteLike, remotePlay,
-  toggleLike, hasLiked, incrementPlay,
+  hasLiked, setLikedLocal, incrementPlay,
   getSavedCreatorName, saveCreatorName,
 } from '../data/community'
 import { useThumbnail } from '../lib/thumbnailService'
@@ -172,10 +172,11 @@ function SquishyDetail({ post: initPost, allPosts, onClose, onPlay, onNavigate }
   const related = allPosts.filter(p => p.id !== post.id).slice(0, cols * 2)
 
   function handleLike() {
-    const { count, isLiked } = toggleLike(post.id)
-    setLiked(isLiked)
-    setLikeCount(count)
-    remoteLike(post.id, isLiked ? 1 : -1)
+    const newLiked = !liked
+    setLiked(newLiked)
+    setLikeCount(c => Math.max(0, c + (newLiked ? 1 : -1)))
+    setLikedLocal(post.id, newLiked)
+    remoteLike(post.id, newLiked ? 1 : -1)
   }
 
   function handlePlay() {

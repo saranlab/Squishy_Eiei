@@ -58,6 +58,7 @@ export default function SquishyCreator({ onAdd, onClose }) {
   const [faceElevation,  setFaceElevation]  = useState(0)
   const [faceOffsetX,    setFaceOffsetX]    = useState(0)
   const [faceOffsetY,    setFaceOffsetY]    = useState(0)
+  const [facePieceIndex, setFacePieceIndex] = useState(0)
   const studioRef = useRef()
 
   function handleAdd() {
@@ -78,6 +79,7 @@ export default function SquishyCreator({ onAdd, onClose }) {
         faceElevation,
         faceOffsetX,
         faceOffsetY,
+        facePieceIndex,
       })
     } else {
       const shapeEmoji = CREATOR_SHAPES.find(s => s.id === shape)?.emoji ?? '🫧'
@@ -206,9 +208,21 @@ export default function SquishyCreator({ onAdd, onClose }) {
               </div>
             </div>
           </div>
-          <SculptStudio ref={studioRef} faceExpression={faceExpression} faceAngle={faceAngle} faceElevation={faceElevation} faceOffsetX={faceOffsetX} faceOffsetY={faceOffsetY} />
+          <SculptStudio ref={studioRef} faceExpression={faceExpression} faceAngle={faceAngle} faceElevation={faceElevation} faceOffsetX={faceOffsetX} faceOffsetY={faceOffsetY} facePieceIndex={facePieceIndex} />
 
           <div style={{ background: '#FFF4E8', borderRadius: 14, padding: '12px 14px', marginTop: 10, border: '1.5px solid #F0D8B0' }}>
+            <label style={{ ...LABEL, marginBottom: 8 }}>🎯 Face on Piece</label>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+              {[0, 1, 2].map(i => (
+                <button key={i} onClick={() => setFacePieceIndex(i)} style={{
+                  flex: 1, padding: '6px 4px', borderRadius: 9,
+                  border: facePieceIndex === i ? '2px solid #C68B4A' : '2px solid #E8D8C0',
+                  background: facePieceIndex === i ? '#FFF0D8' : 'white',
+                  cursor: 'pointer', fontFamily: "'Fredoka One', cursive",
+                  fontSize: 13, color: facePieceIndex === i ? '#7A4A18' : '#B09070',
+                }}>Piece {i + 1}</button>
+              ))}
+            </div>
             <label style={{ ...LABEL, marginBottom: 10 }}>😊 Face Expression</label>
             <div style={{ display: 'flex', gap: 6, marginBottom: faceExpression !== 'none' ? 12 : 0 }}>
               {FACE_TYPES.map(f => (
