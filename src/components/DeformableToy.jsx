@@ -737,6 +737,21 @@ function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
     }, riseDuration)
   }, [riseDuration, onFaceChange])
 
+  // Release stuck squishes when pointer is released outside the canvas
+  useEffect(() => {
+    const release = () => {
+      if (squishesRef.current.some(s => s.held)) onPointerUp()
+    }
+    window.addEventListener('pointerup', release)
+    window.addEventListener('touchend', release)
+    window.addEventListener('touchcancel', release)
+    return () => {
+      window.removeEventListener('pointerup', release)
+      window.removeEventListener('touchend', release)
+      window.removeEventListener('touchcancel', release)
+    }
+  }, [onPointerUp])
+
   useFrame(({ camera }) => {
     if (!meshRef.current) return
 
@@ -1028,6 +1043,21 @@ function SingleDeformableToy({ toy, onFaceChange, pendingMove, waxed }) {
       squishesRef.current = []; setFace('normal'); onFaceChange?.('normal')
     }, riseDuration)
   }, [riseDuration, onFaceChange])
+
+  // Release stuck squishes when pointer is released outside the canvas
+  useEffect(() => {
+    const release = () => {
+      if (squishesRef.current.some(s => s.held)) onPointerUp()
+    }
+    window.addEventListener('pointerup', release)
+    window.addEventListener('touchend', release)
+    window.addEventListener('touchcancel', release)
+    return () => {
+      window.removeEventListener('pointerup', release)
+      window.removeEventListener('touchend', release)
+      window.removeEventListener('touchcancel', release)
+    }
+  }, [onPointerUp])
 
   useFrame(() => {
     if (!meshRef.current) return

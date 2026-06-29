@@ -2,21 +2,21 @@ import { useState, useRef } from 'react'
 import { CREATOR_COLORS, CREATOR_SHAPES, SPEED_PRESETS } from '../data/toys'
 import MiniPreview from './MiniPreview'
 import SculptStudio from './SculptStudio'
-
-const SPEEDS = [
-  { id: 'slow',   label: '🐌 Slooow', desc: '~4 sec' },
-  { id: 'normal', label: '😐 Normal', desc: '~2 sec' },
-  { id: 'bouncy', label: '🐇 Bouncy', desc: 'snap' },
-]
+import { useLang } from '../lib/lang'
 
 const FACE_TYPES = [
-  { id: 'smile', emoji: '😊', label: 'Smile' },
-  { id: 'cry',   emoji: '😢', label: 'Cry'   },
-  { id: 'dead',  emoji: '💀', label: 'Dead'  },
-  { id: 'openmouth', emoji: '😮', label: 'Open' },
-  { id: 'none',  emoji: '⬜', label: 'None'  },
+  { id: 'smile',     emoji: '😊', tk: 'face_smile' },
+  { id: 'cry',       emoji: '😢', tk: 'face_cry'   },
+  { id: 'dead',      emoji: '💀', tk: 'face_dead'  },
+  { id: 'openmouth', emoji: '😮', tk: 'face_openmouth' },
+  { id: 'none',      emoji: '⬜', tk: 'face_none'  },
 ]
 
+const SPEEDS = [
+  { id: 'slow',   labelKey: 'speed_slow',   descKey: 'speed_slow_desc' },
+  { id: 'normal', labelKey: 'speed_normal', descKey: 'speed_normal_desc' },
+  { id: 'bouncy', labelKey: 'speed_bouncy', descKey: 'speed_bouncy_desc' },
+]
 
 function lighten(hex) {
   const n = parseInt(hex.slice(1), 16)
@@ -48,6 +48,7 @@ function tabStyle(active) {
 }
 
 export default function SquishyCreator({ onAdd, onClose }) {
+  const { t } = useLang()
   const [mode,           setMode]           = useState('preset')
   const [shape,          setShape]          = useState('sphere')
   const [color,          setColor]          = useState('#FF6B6B')
@@ -62,7 +63,7 @@ export default function SquishyCreator({ onAdd, onClose }) {
       const face = studioRef.current?.getFaceSettings() ?? {}
       onAdd({
         id:          `custom_${Date.now()}`,
-        name:        name.trim() || 'My Squishy',
+        name:        name.trim() || t('name_placeholder'),
         emoji:       '🎨',
         geometry:    'composed',
         composition,
@@ -76,7 +77,7 @@ export default function SquishyCreator({ onAdd, onClose }) {
       const shapeEmoji = CREATOR_SHAPES.find(s => s.id === shape)?.emoji ?? '🫧'
       onAdd({
         id:          `custom_${Date.now()}`,
-        name:        name.trim() || 'My Squishy',
+        name:        name.trim() || t('name_placeholder'),
         emoji:       shapeEmoji,
         color,
         colorDark:   darken(color),
@@ -104,14 +105,14 @@ export default function SquishyCreator({ onAdd, onClose }) {
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <div style={{ width: 40, height: 4, borderRadius: 99, background: '#E0C89A' }} />
-          <h2 style={{ fontFamily: "'Fredoka One', cursive", fontSize: 20, color: '#7A4A18', margin: 0 }}>Create Your Squishy</h2>
+          <h2 style={{ fontFamily: "'Fredoka One', cursive", fontSize: 20, color: '#7A4A18', margin: 0 }}>{t('create_title')}</h2>
           <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid #E8D8C0', background: 'white', cursor: 'pointer', fontSize: 16, color: '#A07040', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
         </div>
 
         {/* Mode tabs */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-          <button style={tabStyle(mode==='preset')} onClick={() => setMode('preset')}>🧸 Preset Shape</button>
-          <button style={tabStyle(mode==='sculpt')} onClick={() => setMode('sculpt')}>🎨 Sculpt Studio</button>
+          <button style={tabStyle(mode==='preset')} onClick={() => setMode('preset')}>{t('preset_shape')}</button>
+          <button style={tabStyle(mode==='sculpt')} onClick={() => setMode('sculpt')}>{t('sculpt_studio')}</button>
         </div>
 
         {/* ── PRESET MODE ── */}
@@ -122,17 +123,17 @@ export default function SquishyCreator({ onAdd, onClose }) {
             </div>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div>
-                <label style={LABEL}>Name it</label>
-                <input type="text" placeholder="My Squishy" maxLength={14} value={name} onChange={e => setName(e.target.value)}
+                <label style={LABEL}>{t('name_it')}</label>
+                <input type="text" placeholder={t('name_placeholder')} maxLength={14} value={name} onChange={e => setName(e.target.value)}
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '2px solid #E8D8C0', fontFamily: "'Fredoka One', cursive", fontSize: 15, color: '#7A4A18', background: 'white', outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div>
-                <label style={LABEL}>Rise Speed</label>
+                <label style={LABEL}>{t('rise_speed')}</label>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {SPEEDS.map(s => (
                     <button key={s.id} onClick={() => setSpeed(s.id)} style={{ flex: 1, padding: '7px 4px', borderRadius: 10, border: speed===s.id?'2px solid #C68B4A':'2px solid #E8D8C0', background: speed===s.id?'#FFF0D8':'white', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                      <span style={{ fontSize: 13 }}>{s.label}</span>
-                      <span style={{ fontSize: 9, color: '#C8A070' }}>{s.desc}</span>
+                      <span style={{ fontSize: 13 }}>{t(s.labelKey)}</span>
+                      <span style={{ fontSize: 9, color: '#C8A070' }}>{t(s.descKey)}</span>
                     </button>
                   ))}
                 </div>
@@ -140,7 +141,7 @@ export default function SquishyCreator({ onAdd, onClose }) {
             </div>
           </div>
 
-          <label style={LABEL}>Shape</label>
+          <label style={LABEL}>{t('shape')}</label>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 16 }}>
             {CREATOR_SHAPES.map(s => (
               <button key={s.id} onClick={() => setShape(s.id)} style={{ padding: '8px 6px', borderRadius: 12, border: shape===s.id?'2px solid #C68B4A':'2px solid #E8D8C0', background: shape===s.id?'#FFF0D8':'white', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
@@ -150,7 +151,7 @@ export default function SquishyCreator({ onAdd, onClose }) {
             ))}
           </div>
 
-          <label style={LABEL}>Color</label>
+          <label style={LABEL}>{t('color')}</label>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,32px)', gap: 8, alignItems: 'center', marginBottom: 16 }}>
             {CREATOR_COLORS.map(c => (
               <button key={c} onClick={() => setColor(c)} style={{ width: 32, height: 32, borderRadius: '50%', background: c, border: color===c?'3px solid #7A4A18':'3px solid transparent', cursor: 'pointer', outline: color===c?'2px solid white':'none', outlineOffset: -4, transform: color===c?'scale(1.15)':'scale(1)', transition: 'transform 0.1s' }} />
@@ -161,7 +162,7 @@ export default function SquishyCreator({ onAdd, onClose }) {
             </label>
           </div>
 
-          <label style={LABEL}>😊 Face</label>
+          <label style={LABEL}>{t('face')}</label>
           <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
             {FACE_TYPES.map(f => (
               <button key={f.id} onClick={() => setFaceExpression(f.id)} style={{
@@ -171,7 +172,7 @@ export default function SquishyCreator({ onAdd, onClose }) {
                 cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
               }}>
                 <span style={{ fontSize: 18 }}>{f.emoji}</span>
-                <span style={{ fontSize: 8, color: '#A07040', fontWeight: 700 }}>{f.label}</span>
+                <span style={{ fontSize: 8, color: '#A07040', fontWeight: 700 }}>{t(f.tk)}</span>
               </button>
             ))}
           </div>
@@ -182,17 +183,17 @@ export default function SquishyCreator({ onAdd, onClose }) {
           <div style={{ marginBottom: 10 }}>
             <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
               <div style={{ flex: 1 }}>
-                <label style={LABEL}>Name it</label>
-                <input type="text" placeholder="My Squishy" maxLength={14} value={name} onChange={e => setName(e.target.value)}
+                <label style={LABEL}>{t('name_it')}</label>
+                <input type="text" placeholder={t('name_placeholder')} maxLength={14} value={name} onChange={e => setName(e.target.value)}
                   style={{ width: '100%', padding: '8px 10px', borderRadius: 10, border: '2px solid #E8D8C0', fontFamily: "'Fredoka One', cursive", fontSize: 14, color: '#7A4A18', background: 'white', outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={LABEL}>Rise Speed</label>
+                <label style={LABEL}>{t('rise_speed')}</label>
                 <div style={{ display: 'flex', gap: 5 }}>
                   {SPEEDS.map(s => (
                     <button key={s.id} onClick={() => setSpeed(s.id)} style={{ flex: 1, padding: '6px 2px', borderRadius: 9, border: speed===s.id?'2px solid #C68B4A':'2px solid #E8D8C0', background: speed===s.id?'#FFF0D8':'white', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                      <span style={{ fontSize: 11 }}>{s.label}</span>
-                      <span style={{ fontSize: 8, color: '#C8A070' }}>{s.desc}</span>
+                      <span style={{ fontSize: 11 }}>{t(s.labelKey)}</span>
+                      <span style={{ fontSize: 8, color: '#C8A070' }}>{t(s.descKey)}</span>
                     </button>
                   ))}
                 </div>
@@ -207,7 +208,7 @@ export default function SquishyCreator({ onAdd, onClose }) {
           onMouseDown={e => e.currentTarget.style.transform='scale(0.97)'}
           onMouseUp={e => e.currentTarget.style.transform='scale(1)'}
         >
-          Add to Shelf 🧸
+          {t('add_to_shelf')}
         </button>
       </div>
     </div>

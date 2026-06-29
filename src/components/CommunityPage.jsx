@@ -6,6 +6,7 @@ import {
 } from '../data/community'
 import { useThumbnail } from '../lib/thumbnailService'
 import SingleToyView from './SingleToyView'
+import { useLang } from '../lib/lang'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -15,12 +16,12 @@ function fmtNum(n) {
   return String(n)
 }
 
-function timeAgo(ts) {
+function timeAgo(ts, t) {
   const s = (Date.now() - ts) / 1000
-  if (s < 60)    return 'just now'
-  if (s < 3600)  return `${Math.floor(s / 60)}m ago`
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
-  return `${Math.floor(s / 86400)}d ago`
+  if (s < 60)    return t('just_now')
+  if (s < 3600)  return t('m_ago', Math.floor(s / 60))
+  if (s < 86400) return t('h_ago', Math.floor(s / 3600))
+  return t('d_ago', Math.floor(s / 86400))
 }
 
 function useGrid() {
@@ -63,6 +64,7 @@ function ToyThumb({ toy }) {
 function SquishyCard({ post, onClick }) {
   const [hov, setHov] = useState(false)
   const thumb = useThumbnail(post.toy)
+  const { t } = useLang()
 
   return (
     <article
@@ -118,7 +120,7 @@ function SquishyCard({ post, onClick }) {
         }}>{post.toy.name}</div>
 
         <div style={{ fontSize: 'clamp(10px, 2.5vw, 11px)', color: '#A07040', marginBottom: 6 }}>
-          by {post.creatorName}
+          {t('by')} {post.creatorName}
         </div>
 
         <div style={{ display: 'flex', gap: 10, fontSize: 'clamp(10px, 2.5vw, 11px)', color: '#C8A070' }}>
@@ -162,6 +164,7 @@ function SquishyDetail({ post: initPost, allPosts, onClose, onPlay, onNavigate }
   const [liked,     setLiked]     = useState(() => hasLiked(initPost.id))
   const [likeCount, setLikeCount] = useState(initPost.likes)
   const { cols, gap } = useGrid()
+  const { t } = useLang()
 
   useEffect(() => {
     setPost(initPost)
@@ -233,14 +236,14 @@ function SquishyDetail({ post: initPost, allPosts, onClose, onPlay, onNavigate }
         }}>{post.toy.name}</h1>
 
         <div style={{ fontSize: 13, color: '#A07040', marginBottom: 14 }}>
-          by <strong style={{ color: '#7A4A18' }}>{post.creatorName}</strong>
-          <span style={{ color: '#C8A070', marginLeft: 8 }}>· {timeAgo(post.timestamp)}</span>
+          {t('by')} <strong style={{ color: '#7A4A18' }}>{post.creatorName}</strong>
+          <span style={{ color: '#C8A070', marginLeft: 8 }}>· {timeAgo(post.timestamp, t)}</span>
         </div>
 
         <div style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
           {[
-            { icon: '❤️', value: fmtNum(likeCount), label: 'Likes' },
-            { icon: '▶',  value: fmtNum(post.plays ?? 0), label: 'Plays' },
+            { icon: '❤️', value: fmtNum(likeCount), label: t('likes') },
+            { icon: '▶',  value: fmtNum(post.plays ?? 0), label: t('plays') },
           ].map(({ icon, value, label }) => (
             <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span style={{ fontSize: 17 }}>{icon}</span>
@@ -258,7 +261,7 @@ function SquishyDetail({ post: initPost, allPosts, onClose, onPlay, onNavigate }
             color: 'white',
             fontFamily: "'Fredoka One', cursive", fontSize: 15,
             cursor: 'pointer', boxShadow: '0 5px 16px rgba(198,139,74,0.42)',
-          }}>▶ Play</button>
+          }}>{t('btn_play')}</button>
 
           <button onClick={handleLike} style={{
             flex: '1 1 110px', padding: '12px 16px', borderRadius: 999,
@@ -267,7 +270,7 @@ function SquishyDetail({ post: initPost, allPosts, onClose, onPlay, onNavigate }
             color: liked ? '#E84060' : '#A07040',
             fontFamily: "'Fredoka One', cursive", fontSize: 15,
             cursor: 'pointer', transition: 'all 0.15s',
-          }}>{liked ? '❤️ Liked' : '🤍 Like'}</button>
+          }}>{liked ? t('btn_liked') : t('btn_like')}</button>
 
           <button onClick={handleShare} style={{
             flex: '1 1 110px', padding: '12px 16px', borderRadius: 999,
@@ -275,7 +278,7 @@ function SquishyDetail({ post: initPost, allPosts, onClose, onPlay, onNavigate }
             color: '#A07040',
             fontFamily: "'Fredoka One', cursive", fontSize: 15,
             cursor: 'pointer',
-          }}>↗ Share</button>
+          }}>{t('btn_share')}</button>
         </div>
       </div>
 
@@ -284,7 +287,7 @@ function SquishyDetail({ post: initPost, allPosts, onClose, onPlay, onNavigate }
           <h3 style={{
             fontFamily: "'Fredoka One', cursive",
             fontSize: 18, color: '#7A4A18', margin: '0 0 14px',
-          }}>✨ Related Squishies</h3>
+          }}>{t('related_title')}</h3>
           <div style={{
             display: 'grid',
             gridTemplateColumns: `repeat(${cols}, 1fr)`,
@@ -312,6 +315,7 @@ function ShareModal({ myToys, onDone, onClose }) {
   const [name,     setName]     = useState(getSavedCreatorName)
   const [busy,     setBusy]     = useState(false)
   const [done,     setDone]     = useState(false)
+  const { t } = useLang()
 
   const OVERLAY = {
     position: 'fixed', inset: 0, zIndex: 80,
@@ -334,12 +338,12 @@ function ShareModal({ myToys, onDone, onClose }) {
       <div style={CARD}>
         <div style={{ fontSize: 52, marginBottom: 8 }}>🫧</div>
         <h3 style={{ fontFamily: "'Fredoka One', cursive", fontSize: 20, color: '#7A4A18', margin: '0 0 8px' }}>
-          No squishies yet!
+          {t('no_squishies_title')}
         </h3>
         <p style={{ fontSize: 13, color: '#A07040', margin: '0 0 18px' }}>
-          Create a squishy first, then share it here.
+          {t('no_squishies_msg')}
         </p>
-        <button onClick={onClose} style={BTN}>Got it</button>
+        <button onClick={onClose} style={BTN}>{t('got_it')}</button>
       </div>
     </div>
   )
@@ -359,9 +363,9 @@ function ShareModal({ myToys, onDone, onClose }) {
     <div style={OVERLAY}>
       <div style={CARD}>
         <div style={{ fontSize: 52, marginBottom: 8 }}>🎉</div>
-        <h3 style={{ fontFamily: "'Fredoka One', cursive", fontSize: 22, color: '#7A4A18', margin: '0 0 8px' }}>Shared!</h3>
-        <p style={{ fontSize: 13, color: '#A07040', margin: '0 0 18px' }}>Your squishy is now in the community!</p>
-        <button onClick={onClose} style={BTN}>Back to Community</button>
+        <h3 style={{ fontFamily: "'Fredoka One', cursive", fontSize: 22, color: '#7A4A18', margin: '0 0 8px' }}>{t('shared_title')}</h3>
+        <p style={{ fontSize: 13, color: '#A07040', margin: '0 0 18px' }}>{t('shared_msg')}</p>
+        <button onClick={onClose} style={BTN}>{t('back_community')}</button>
       </div>
     </div>
   )
@@ -370,13 +374,13 @@ function ShareModal({ myToys, onDone, onClose }) {
     <div style={OVERLAY} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={CARD}>
         <h3 style={{ fontFamily: "'Fredoka One', cursive", fontSize: 20, color: '#7A4A18', margin: '0 0 14px' }}>
-          Share to Community 🌍
+          {t('share_title')}
         </h3>
 
         {myToys.length > 1 && (
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#A07040', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8, textAlign: 'left' }}>
-              Choose a squishy
+              {t('choose_squishy')}
             </div>
             <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
               {myToys.map(t => {
@@ -424,7 +428,7 @@ function ShareModal({ myToys, onDone, onClose }) {
 
         {/* Creator name */}
         <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#A07040', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6, textAlign: 'left' }}>
-          Your name
+          {t('your_name')}
         </label>
         <input
           placeholder="Anonymous"
@@ -443,14 +447,14 @@ function ShareModal({ myToys, onDone, onClose }) {
 
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={onClose} style={{ ...BTN, background: 'white', color: '#A07040', border: '2px solid #E8D8C0', boxShadow: 'none', flex: 1 }}>
-            Cancel
+            {t('cancel')}
           </button>
           <button
             onClick={submit}
             disabled={!selected || busy}
             style={{ ...BTN, flex: 2, opacity: (selected && !busy) ? 1 : 0.5 }}
           >
-            {busy ? 'Sharing…' : 'Share ✨'}
+            {busy ? t('sharing') : t('share_btn')}
           </button>
         </div>
       </div>
@@ -466,6 +470,7 @@ export default function CommunityPage({ onClose, myToys, onPlay }) {
   const [sharing,  setSharing]  = useState(false)
   const [posts,    setPosts]    = useState([])
   const [loading,  setLoading]  = useState(true)
+  const { t } = useLang()
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -531,7 +536,7 @@ export default function CommunityPage({ onClose, myToys, onPlay }) {
           fontFamily: "'Fredoka One', cursive",
           fontSize: 'clamp(18px, 5vw, 22px)', color: '#7A4A18',
           margin: 0,
-        }}>🌍 Community</h1>
+        }}>🌍 {t('community')}</h1>
 
         <button onClick={() => setSharing(true)} style={{
           display: 'flex', alignItems: 'center', gap: 5,
@@ -540,7 +545,7 @@ export default function CommunityPage({ onClose, myToys, onPlay }) {
           background: 'linear-gradient(135deg, #FFF0D8, #FFE0B0)',
           fontFamily: "'Fredoka One', cursive", fontSize: 13, color: '#7A4A18',
           cursor: 'pointer',
-        }}>✨ Share</button>
+        }}>✨ {t('btn_share')}</button>
       </header>
 
       {/* Search */}

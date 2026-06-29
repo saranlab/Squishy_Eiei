@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { COMPOSED_SHAPES, buildComposedGeo, getFrontZ, hexToRgb, makeVertexColors, computeWeldedNormals } from '../data/shapes'
+import { useLang } from '../lib/lang'
 
 const MAX_PARTS = 3
 const DEFAULT_COLORS = ['#FFB0B0', '#B0C8FF', '#B0FFB8']
@@ -10,19 +11,19 @@ const PAINT_SWATCHES = ['#FF3B3B','#FF9500','#FFCC00','#34C759','#007AFF','#AF52
 const BASE_COLORS = ['#FFB0B0','#FFDC8C','#FFF8A0','#B0EEB8','#B0C8FF','#D8B0FF','#FFB8D8','#F5F5F5']
 
 const FACE_TYPES = [
-  { id: 'smile',     emoji: '😊', label: 'Smile' },
-  { id: 'cry',       emoji: '😢', label: 'Cry'   },
-  { id: 'dead',      emoji: '💀', label: 'Dead'  },
-  { id: 'openmouth', emoji: '😮', label: 'Open'  },
-  { id: 'none',      emoji: '⬜', label: 'None'  },
+  { id: 'smile',     emoji: '😊', tk: 'face_smile' },
+  { id: 'cry',       emoji: '😢', tk: 'face_cry'   },
+  { id: 'dead',      emoji: '💀', tk: 'face_dead'  },
+  { id: 'openmouth', emoji: '😮', tk: 'face_openmouth' },
+  { id: 'none',      emoji: '⬜', tk: 'face_none'  },
 ]
 
 const SIDEBAR_ICONS = [
-  { id: 'sculpt', emoji: '✍️', title: 'Sculpt' },
-  { id: 'paint',  emoji: '🎨', title: 'Paint'  },
-  { id: 'text',   emoji: '🔤', title: 'Text'   },
-  { id: 'face',   emoji: '😊', title: 'Face'   },
-  { id: 'part',   emoji: '🧩', title: 'Parts'  },
+  { id: 'sculpt', emoji: '✍️', tk: 'sculpt_tool' },
+  { id: 'paint',  emoji: '🎨', tk: 'paint_tool'  },
+  { id: 'text',   emoji: '🔤', tk: 'text_tool'   },
+  { id: 'face',   emoji: '😊', tk: 'face_tool'   },
+  { id: 'part',   emoji: '🧩', tk: 'parts_tool'  },
 ]
 
 // ─── brush math ──────────────────────────────────────────────────────────────
@@ -355,6 +356,7 @@ function FaceOverlay({ parts, faceExpression, faceAngle, faceElevation, faceOffs
 // ─── SculptStudio ─────────────────────────────────────────────────────────────
 
 const SculptStudio = forwardRef((props, ref) => {
+  const { t } = useLang()
   const [parts, setParts] = useState(() => [mkPart(0)])
   const [selectedId, setSelectedId] = useState(() => parts[0].id)
   const [panel, setPanel] = useState('sculpt')
@@ -455,7 +457,7 @@ const SculptStudio = forwardRef((props, ref) => {
         {/* Right sidebar icons */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           {SIDEBAR_ICONS.map(ico => (
-            <button key={ico.id} onClick={() => setPanel(ico.id)} title={ico.title} style={iconBtn(ico.id)}>
+            <button key={ico.id} onClick={() => setPanel(ico.id)} title={t(ico.tk)} style={iconBtn(ico.id)}>
               {ico.emoji}
             </button>
           ))}
@@ -479,7 +481,7 @@ const SculptStudio = forwardRef((props, ref) => {
 
       {/* Parts row */}
       <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: '#A07040', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Parts</span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#A07040', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{t('parts_label')}</span>
         {parts.map((p, i) => (
           <button key={p.id} onClick={() => setSelectedId(p.id)} style={{
             flex: 1, padding: '4px 3px', borderRadius: 8, cursor: 'pointer', position: 'relative',
@@ -500,7 +502,7 @@ const SculptStudio = forwardRef((props, ref) => {
       {/* ── Sculpt panel ── */}
       {panel === 'sculpt' && (
         <div style={panelBox}>
-          <span style={LABEL}>Brush Size</span>
+          <span style={LABEL}>{t('brush_size')}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 10, color: '#C8A070' }}>S</span>
             <input type="range" min={0.06} max={1.2} step={0.02} value={brushRadius}
@@ -508,11 +510,11 @@ const SculptStudio = forwardRef((props, ref) => {
             <span style={{ fontSize: 10, color: '#C8A070' }}>L</span>
           </div>
           <div style={{ fontSize: 9, color: '#B09070', marginTop: 3, textAlign: 'center' }}>
-            Drag UP to inflate · DOWN to indent · orbit to rotate
+            {t('sculpt_hint')}
           </div>
           <button onClick={() => partRefs.current[selectedId]?.resetSculpt()}
             style={{ marginTop: 5, width: '100%', padding: '4px', fontSize: 9, borderRadius: 6, border: '1.5px solid #E8D8C0', background: 'white', color: '#A07040', cursor: 'pointer' }}>
-            Reset Shape
+            {t('reset_shape')}
           </button>
         </div>
       )}
@@ -541,7 +543,7 @@ const SculptStudio = forwardRef((props, ref) => {
             <span style={{ fontSize: 10, color: '#C8A070' }}>L</span>
             <button onClick={() => partRefs.current[selectedId]?.resetPaint()}
               style={{ padding: '3px 8px', fontSize: 9, borderRadius: 6, border: '1.5px solid #E8D8C0', background: 'white', color: '#A07040', cursor: 'pointer' }}>
-              Clear
+              {t('paint_clear')}
             </button>
           </div>
         </div>
@@ -550,9 +552,9 @@ const SculptStudio = forwardRef((props, ref) => {
       {/* ── Text panel ── */}
       {panel === 'text' && selectedPart && (
         <div style={panelBox}>
-          <span style={LABEL}>Text on Squishy</span>
+          <span style={LABEL}>{t('text_on_squishy')}</span>
           <input
-            type="text" placeholder="Write something cute..." maxLength={16}
+            type="text" placeholder={t('text_placeholder')} maxLength={16}
             value={selectedPart.textLabel ?? ''}
             onChange={e => updatePart(selectedId, { textLabel: e.target.value })}
             style={{ width: '100%', padding: '7px 10px', borderRadius: 9, border: '2px solid #E8D8C0', fontFamily: "'Nunito',sans-serif", fontSize: 13, color: '#7A4A18', background: 'white', outline: 'none', boxSizing: 'border-box', marginBottom: 8 }}
@@ -596,7 +598,7 @@ const SculptStudio = forwardRef((props, ref) => {
         <div style={panelBox}>
           {parts.length > 1 && (
             <>
-              <span style={LABEL}>Face on Piece</span>
+              <span style={LABEL}>{t('face_on_piece')}</span>
               <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
                 {parts.map((p, i) => (
                   <button key={p.id} onClick={() => setFacePieceIndex(i)} style={{
@@ -605,13 +607,13 @@ const SculptStudio = forwardRef((props, ref) => {
                     background: facePieceIndex === i ? '#FFF0D8' : 'white',
                     fontFamily: "'Fredoka One', cursive", fontSize: 12,
                     color: facePieceIndex === i ? '#7A4A18' : '#B09070',
-                  }}>Piece {i + 1}</button>
+                  }}>{t('piece_n', i + 1)}</button>
                 ))}
               </div>
             </>
           )}
 
-          <span style={LABEL}>Expression</span>
+          <span style={LABEL}>{t('expression')}</span>
           <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
             {FACE_TYPES.map(f => (
               <button key={f.id} onClick={() => setFaceExpression(f.id)} style={{
@@ -621,13 +623,13 @@ const SculptStudio = forwardRef((props, ref) => {
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
               }}>
                 <span style={{ fontSize: 15 }}>{f.emoji}</span>
-                <span style={{ fontSize: 7, color: '#A07040', fontWeight: 700 }}>{f.label}</span>
+                <span style={{ fontSize: 7, color: '#A07040', fontWeight: 700 }}>{t(f.tk)}</span>
               </button>
             ))}
           </div>
 
           {faceExpression !== 'none' && (<>
-            <span style={LABEL}>Rotate</span>
+            <span style={LABEL}>{t('rotate')}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
               <input type="range" min={0} max={359} step={1} value={faceAngle}
                 onChange={e => setFaceAngle(+e.target.value)}
@@ -636,14 +638,14 @@ const SculptStudio = forwardRef((props, ref) => {
               <button onClick={() => setFaceAngle(0)} style={btnReset}>↺</button>
             </div>
             <div style={{ display: 'flex', gap: 10, marginBottom: 10, paddingLeft: 2 }}>
-              {[['0','Front'],['90','Right'],['180','Back'],['270','Left']].map(([deg, lbl]) => (
+              {[['0','dir_front'],['90','dir_right'],['180','dir_back'],['270','dir_left']].map(([deg, key]) => (
                 <button key={deg} onClick={() => setFaceAngle(+deg)} style={{
                   fontSize: 8, color: '#A07040', background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                }}>{lbl}</button>
+                }}>{t(key)}</button>
               ))}
             </div>
 
-            <span style={LABEL}>Tilt</span>
+            <span style={LABEL}>{t('tilt')}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
               <input type="range" min={-90} max={90} step={1} value={faceElevation}
                 onChange={e => setFaceElevation(+e.target.value)}
@@ -652,14 +654,14 @@ const SculptStudio = forwardRef((props, ref) => {
               <button onClick={() => setFaceElevation(0)} style={btnReset}>↺</button>
             </div>
             <div style={{ display: 'flex', gap: 10, marginBottom: 10, paddingLeft: 2 }}>
-              {[['-90','Bottom'],['0','Middle'],['90','Top']].map(([deg, lbl]) => (
+              {[['-90','dir_bottom'],['0','dir_middle'],['90','dir_top']].map(([deg, key]) => (
                 <button key={deg} onClick={() => setFaceElevation(+deg)} style={{
                   fontSize: 8, color: '#A07040', background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                }}>{lbl}</button>
+                }}>{t(key)}</button>
               ))}
             </div>
 
-            <span style={LABEL}>Fine Adjust</span>
+            <span style={LABEL}>{t('fine_adjust')}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
               <span style={{ fontSize: 10, fontWeight: 800, color: '#E04040', width: 12, flexShrink: 0 }}>X</span>
               <input type="range" min={-0.8} max={0.8} step={0.05} value={faceOffsetX}
@@ -685,15 +687,15 @@ const SculptStudio = forwardRef((props, ref) => {
           <div style={{ marginBottom: 10 }}>
             {parts.length < MAX_PARTS ? (
               <button onClick={addPart} style={{ width: '100%', padding: '8px', borderRadius: 10, border: '2px dashed #C68B4A', background: 'white', cursor: 'pointer', fontFamily: "'Fredoka One', cursive", fontSize: 13, color: '#7A4A18' }}>
-                ➕ Add Another Part
+                {t('add_part')}
               </button>
             ) : (
-              <div style={{ textAlign: 'center', fontSize: 11, color: '#C8A070', padding: '4px 0' }}>Max {MAX_PARTS} parts reached</div>
+              <div style={{ textAlign: 'center', fontSize: 11, color: '#C8A070', padding: '4px 0' }}>{t('max_parts', MAX_PARTS)}</div>
             )}
           </div>
 
           {/* Shape */}
-          <span style={LABEL}>Shape</span>
+          <span style={LABEL}>{t('part_shape')}</span>
           <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
             {COMPOSED_SHAPES.map(s => (
               <button key={s.id} onClick={() => updatePart(selectedId, { baseShape: s.id })} style={{
@@ -709,7 +711,7 @@ const SculptStudio = forwardRef((props, ref) => {
           </div>
 
           {/* Color */}
-          <span style={LABEL}>Color</span>
+          <span style={LABEL}>{t('part_color')}</span>
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10 }}>
             {BASE_COLORS.map(c => (
               <button key={c} onClick={() => updatePart(selectedId, { color: c })} style={{
@@ -725,7 +727,7 @@ const SculptStudio = forwardRef((props, ref) => {
 
           {/* Size */}
           <span style={LABEL}>
-            Size — <span style={{ fontWeight: 900, color: '#C68B4A' }}>{partSizeLabel(selectedPart.partScale ?? 1)}</span>
+            {t('part_size')} — <span style={{ fontWeight: 900, color: '#C68B4A' }}>{partSizeLabel(selectedPart.partScale ?? 1)}</span>
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
             <span style={{ fontSize: 9, color: '#C8A070' }}>XS</span>
@@ -737,7 +739,7 @@ const SculptStudio = forwardRef((props, ref) => {
           </div>
 
           {/* Position */}
-          <span style={LABEL}>Position</span>
+          <span style={LABEL}>{t('part_pos')}</span>
           {['x','y','z'].map(axis => (
             <div key={axis} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
               <span style={{ fontSize: 10, fontWeight: 800, color: axis==='x'?'#E04040':axis==='y'?'#208820':'#3060D0', width: 12 }}>{axis.toUpperCase()}</span>
@@ -753,11 +755,11 @@ const SculptStudio = forwardRef((props, ref) => {
           <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
             <button onClick={() => updatePart(selectedId, { partScale: 1.0 })}
               style={{ flex: 1, padding: '3px', fontSize: 9, borderRadius: 6, border: '1.5px solid #E8D8C0', background: 'white', color: '#A07040', cursor: 'pointer' }}>
-              Reset Size
+              {t('reset_size')}
             </button>
             <button onClick={() => updatePart(selectedId, { transform: { x: 0, y: 0, z: 0 } })}
               style={{ flex: 1, padding: '3px', fontSize: 9, borderRadius: 6, border: '1.5px solid #E8D8C0', background: 'white', color: '#A07040', cursor: 'pointer' }}>
-              Reset Pos
+              {t('reset_pos')}
             </button>
           </div>
         </div>
