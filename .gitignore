@@ -26,3 +26,7 @@ dist-ssr
 # Impeccable cache
 .impeccable/
 
+# Local env — never commit real keys
+.env
+.env.local
+

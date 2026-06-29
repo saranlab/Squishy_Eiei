@@ -41,7 +41,7 @@ function applyPaint(col, pos, lx, ly, lz, pr, pg, pb, radius) {
 
 // ─── canvas text label ───────────────────────────────────────────────────────
 
-function TextLabel({ text, z }) {
+function TextLabel({ text, color = '#1A1A1A', size = 1.0, offsetX = 0, offsetY = 0, z }) {
   const texture = useMemo(() => {
     if (!text?.trim()) return null
     const canvas = document.createElement('canvas')
@@ -49,19 +49,31 @@ function TextLabel({ text, z }) {
     const ctx = canvas.getContext('2d')
     ctx.clearRect(0, 0, 512, 128)
     ctx.fillStyle = 'rgba(255,255,255,0.88)'
-    ctx.beginPath(); ctx.roundRect(6, 6, 500, 116, 18); ctx.fill()
-    ctx.fillStyle = '#1A1A1A'
-    ctx.font = 'bold 58px "Arial Rounded MT Bold", Arial, sans-serif'
+    ctx.beginPath()
+    const [rx, ry, rw, rh, rr] = [6, 6, 500, 116, 18]
+    if (ctx.roundRect) {
+      ctx.roundRect(rx, ry, rw, rh, rr)
+    } else {
+      ctx.moveTo(rx+rr, ry); ctx.lineTo(rx+rw-rr, ry)
+      ctx.arcTo(rx+rw, ry, rx+rw, ry+rr, rr); ctx.lineTo(rx+rw, ry+rh-rr)
+      ctx.arcTo(rx+rw, ry+rh, rx+rw-rr, ry+rh, rr); ctx.lineTo(rx+rr, ry+rh)
+      ctx.arcTo(rx, ry+rh, rx, ry+rh-rr, rr); ctx.lineTo(rx, ry+rr)
+      ctx.arcTo(rx, ry, rx+rr, ry, rr); ctx.closePath()
+    }
+    ctx.fill()
+    ctx.fillStyle = color
+    const fontSize = Math.round(58 * size)
+    ctx.font = `bold ${fontSize}px "Arial Rounded MT Bold", Arial, sans-serif`
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
     ctx.fillText(text.slice(0, 16), 256, 64)
     const tex = new THREE.CanvasTexture(canvas)
     tex.needsUpdate = true
     return tex
-  }, [text])
+  }, [text, color, size])
 
   if (!texture) return null
   return (
-    <mesh position={[0, 0, z + 0.015]}>
+    <mesh position={[offsetX, offsetY, z + 0.015]}>
       <planeGeometry args={[1.15, 0.29]} />
       <meshBasicMaterial map={texture} transparent alphaTest={0.01} depthTest={false} />
     </mesh>
@@ -70,7 +82,7 @@ function TextLabel({ text, z }) {
 
 // ─── single part mesh ─────────────────────────────────────────────────────────
 
-const PartMesh = forwardRef(({ part, isSelected, mode, brushRadius, paintColor, orbitRef, onSelect }, ref) => {
+const PartMesh = forwardRef(({ part, isSelected, panel, brushRadius, paintColor, orbitRef, onSelect, showWireframe }, ref) => {
   const meshRef = useRef()
   const posRef = useRef(null)
   const colRef = useRef(null)
@@ -130,27 +142,27 @@ const PartMesh = forwardRef(({ part, isSelected, mode, brushRadius, paintColor, 
   const onPointerDown = useCallback((e) => {
     if (!isSelected) { onSelect(part.id); return }
     e.stopPropagation()
-    if (mode === 'text') return
+    if (panel !== 'sculpt' && panel !== 'paint') return
 
     const local = meshRef.current.worldToLocal(e.point.clone())
     const fn = e.face?.normal ?? local.clone().normalize()
     drag.current = { active: true, lastY: e.clientY, lx: local.x, ly: local.y, lz: local.z, nx: fn.x, ny: fn.y, nz: fn.z }
     if (orbitRef?.current) orbitRef.current.enabled = false
 
-    if (mode === 'paint') {
+    if (panel === 'paint') {
       const [pr, pg, pb] = hexToRgb(paintColor)
       colRef.current = applyPaint(colRef.current, posRef.current, local.x, local.y, local.z, pr, pg, pb, brushRadius)
       geo.attributes.color.array.set(colRef.current)
       geo.attributes.color.needsUpdate = true
     }
-  }, [isSelected, mode, brushRadius, paintColor, orbitRef, onSelect, part.id, geo])
+  }, [isSelected, panel, brushRadius, paintColor, orbitRef, onSelect, part.id, geo])
 
   const onPointerMove = useCallback((e) => {
     const d = drag.current
     if (!d.active) return
     e.stopPropagation()
 
-    if (mode === 'sculpt') {
+    if (panel === 'sculpt') {
       const dy = d.lastY - e.clientY
       d.lastY = e.clientY
       const delta = dy * 0.005
@@ -160,14 +172,14 @@ const PartMesh = forwardRef(({ part, isSelected, mode, brushRadius, paintColor, 
         geo.attributes.position.needsUpdate = true
         geo.computeVertexNormals()
       }
-    } else if (mode === 'paint') {
+    } else if (panel === 'paint') {
       const local = meshRef.current.worldToLocal(e.point.clone())
       const [pr, pg, pb] = hexToRgb(paintColor)
       colRef.current = applyPaint(colRef.current, posRef.current, local.x, local.y, local.z, pr, pg, pb, brushRadius)
       geo.attributes.color.array.set(colRef.current)
       geo.attributes.color.needsUpdate = true
     }
-  }, [mode, brushRadius, paintColor, geo])
+  }, [panel, brushRadius, paintColor, geo])
 
   const onPointerUp = useCallback(() => {
     drag.current.active = false
@@ -186,14 +198,23 @@ const PartMesh = forwardRef(({ part, isSelected, mode, brushRadius, paintColor, 
         <meshStandardMaterial color="white" vertexColors roughness={0.52} metalness={0.05} />
       </mesh>
 
-      {/* Gold wireframe highlight on selected part */}
-      {isSelected && (
+      {/* Gold wireframe highlight on selected part (toggleable) */}
+      {isSelected && showWireframe && (
         <mesh geometry={geo} scale={[1.035, 1.035, 1.035]}>
           <meshBasicMaterial color="#FFD700" wireframe transparent opacity={0.18} depthTest={false} />
         </mesh>
       )}
 
-      {part.textLabel?.trim() && <TextLabel text={part.textLabel} z={getFrontZ(part.baseShape)} />}
+      {part.textLabel?.trim() && (
+        <TextLabel
+          text={part.textLabel}
+          color={part.textColor ?? '#1A1A1A'}
+          size={part.textSize ?? 1.0}
+          offsetX={part.textOffsetX ?? 0}
+          offsetY={part.textOffsetY ?? 0}
+          z={getFrontZ(part.baseShape)}
+        />
+      )}
     </group>
   )
 })
@@ -202,16 +223,6 @@ PartMesh.displayName = 'PartMesh'
 // ─── helpers for panel UI ─────────────────────────────────────────────────────
 
 const LABEL = { fontSize: 10, fontWeight: 700, color: '#A07040', letterSpacing: '0.1em', textTransform: 'uppercase', display: 'block', marginBottom: 5 }
-
-function tabBtn(active) {
-  return {
-    flex: 1, padding: '6px 2px', borderRadius: 9, cursor: 'pointer',
-    border: active ? '2px solid #C68B4A' : '2px solid #E8D8C0',
-    background: active ? '#FFF0D8' : 'white',
-    fontFamily: "'Fredoka One', cursive", fontSize: 12,
-    color: active ? '#7A4A18' : '#A07040',
-  }
-}
 
 // ─── SculptStudio (main export) ───────────────────────────────────────────────
 
@@ -223,10 +234,128 @@ function partSizeLabel(s) {
   return 'XL'
 }
 
-const SculptStudio = forwardRef((_props, ref) => {
-  const [parts, setParts] = useState(() => [{ id: `p0_${Date.now()}`, baseShape: 'sphere', color: DEFAULT_COLORS[0], textLabel: '', partScale: 1.0, transform: { x: 0, y: 0, z: 0 } }])
+const SIDEBAR_ICONS = [
+  { id: 'sculpt',   emoji: '✍️', title: 'Sculpt'    },
+  { id: 'paint',    emoji: '🎨', title: 'Paint'     },
+  { id: 'text',     emoji: '🔤', title: 'Text'      },
+  { id: 'add',      emoji: '➕', title: 'Add Part'  },
+  { id: 'position', emoji: '📐', title: 'Position'  },
+  { id: 'color',    emoji: '🖌️', title: 'Color'     },
+  { id: 'size',     emoji: '⚖️', title: 'Size'      },
+]
+
+function mkPart(idx) {
+  return { id: `p${idx}_${Date.now()}`, baseShape: 'sphere', color: DEFAULT_COLORS[idx % 3], textLabel: '', textColor: '#1A1A1A', textSize: 1.0, textOffsetX: 0, textOffsetY: 0, partScale: 1.0, transform: { x: 0, y: 0, z: 0 } }
+}
+
+// ─── face preview components (canvas-only, no squish animation) ───────────────
+
+function PreviewEye({ pos, expression }) {
+  if (expression === 'dead') {
+    return (
+      <group position={pos}>
+        <mesh rotation={[0, 0, Math.PI / 4]}>
+          <boxGeometry args={[0.1, 0.018, 0.01]} />
+          <meshStandardMaterial color="#0A0A0A" />
+        </mesh>
+        <mesh rotation={[0, 0, -Math.PI / 4]}>
+          <boxGeometry args={[0.1, 0.018, 0.01]} />
+          <meshStandardMaterial color="#0A0A0A" />
+        </mesh>
+      </group>
+    )
+  }
+  return (
+    <group position={pos}>
+      <mesh>
+        <sphereGeometry args={[0.052, 8, 8]} />
+        <meshStandardMaterial color="#0A0A0A" roughness={0.1} metalness={0.3} />
+      </mesh>
+      <mesh position={[0.018, 0.018, 0.04]}>
+        <sphereGeometry args={[0.014, 5, 5]} />
+        <meshStandardMaterial color="white" roughness={0} />
+      </mesh>
+    </group>
+  )
+}
+
+function PreviewMouth({ expression }) {
+  const curve = useMemo(() => {
+    if (expression === 'cry')
+      return new THREE.QuadraticBezierCurve3(new THREE.Vector3(-0.12,-0.04,0), new THREE.Vector3(0,0.06,0), new THREE.Vector3(0.12,-0.04,0))
+    if (expression === 'dead')
+      return new THREE.QuadraticBezierCurve3(new THREE.Vector3(-0.1,0,0), new THREE.Vector3(0,0,0), new THREE.Vector3(0.1,0,0))
+    return new THREE.QuadraticBezierCurve3(new THREE.Vector3(-0.12,0.04,0), new THREE.Vector3(0,-0.06,0), new THREE.Vector3(0.12,0.04,0))
+  }, [expression])
+
+  const tubeGeo = useMemo(
+    () => expression !== 'openmouth' ? new THREE.TubeGeometry(curve, 12, 0.022, 6, false) : null,
+    [curve, expression]
+  )
+
+  if (expression === 'openmouth') {
+    return (
+      <mesh position={[0, -0.04, 0]}>
+        <circleGeometry args={[0.065, 12]} />
+        <meshStandardMaterial color="#111" roughness={0.4} side={THREE.DoubleSide} />
+      </mesh>
+    )
+  }
+  return <mesh geometry={tubeGeo}><meshStandardMaterial color="#111" roughness={0.4} /></mesh>
+}
+
+function FaceOverlay({ parts, faceExpression, faceAngle, faceElevation, faceOffsetX, faceOffsetY }) {
+  const primary = parts[0]
+  if (!primary || !faceExpression || faceExpression === 'none') return null
+
+  const fz  = getFrontZ(primary.baseShape ?? 'sphere') * (primary.partScale ?? 1)
+  const tx  = primary.transform?.x ?? 0
+  const ty  = primary.transform?.y ?? 0
+  const tz  = primary.transform?.z ?? 0
+  const ox  = faceOffsetX ?? 0
+  const oy  = faceOffsetY ?? 0
+  const a   = ((faceAngle ?? 0) * Math.PI) / 180
+  const e   = ((faceElevation ?? 0) * Math.PI) / 180
+
+  const facePos = [
+    tx + ox + Math.sin(a) * Math.cos(e) * fz,
+    ty + oy + Math.sin(e) * fz,
+    tz + Math.cos(a) * Math.cos(e) * fz,
+  ]
+  const faceRot = new THREE.Euler(-e, a, 0, 'YXZ')
+
+  return (
+    <group position={facePos} rotation={faceRot}>
+      <PreviewEye pos={[-0.22, 0.1, 0]} expression={faceExpression} />
+      <PreviewEye pos={[ 0.22, 0.1, 0]} expression={faceExpression} />
+      <PreviewMouth expression={faceExpression} />
+      {faceExpression === 'cry' && (<>
+        <mesh position={[-0.22, 0.02, 0]}>
+          <sphereGeometry args={[0.026, 6, 6]} />
+          <meshStandardMaterial color="#88AAFF" transparent opacity={0.88} roughness={0.1} />
+        </mesh>
+        <mesh position={[0.22, 0.02, 0]}>
+          <sphereGeometry args={[0.026, 6, 6]} />
+          <meshStandardMaterial color="#88AAFF" transparent opacity={0.88} roughness={0.1} />
+        </mesh>
+      </>)}
+      <mesh position={[-0.42, -0.06, -0.01]}>
+        <sphereGeometry args={[0.16, 8, 6]} />
+        <meshStandardMaterial color="#FFB0B0" transparent opacity={0.48} roughness={1} />
+      </mesh>
+      <mesh position={[0.42, -0.06, -0.01]}>
+        <sphereGeometry args={[0.16, 8, 6]} />
+        <meshStandardMaterial color="#FFB0B0" transparent opacity={0.48} roughness={1} />
+      </mesh>
+    </group>
+  )
+}
+
+const SculptStudio = forwardRef(({ faceExpression = 'smile', faceAngle = 0, faceElevation = 0, faceOffsetX = 0, faceOffsetY = 0 }, ref) => {
+  const [parts, setParts] = useState(() => [mkPart(0)])
   const [selectedId, setSelectedId] = useState(() => parts[0].id)
-  const [mode, setMode] = useState('sculpt')
+  const [panel, setPanel] = useState('sculpt')
+  const [showWireframe, setShowWireframe] = useState(true)
   const [brushRadius, setBrushRadius] = useState(0.55)
   const [paintColor, setPaintColor] = useState('#FF3B3B')
 
@@ -245,9 +374,10 @@ const SculptStudio = forwardRef((_props, ref) => {
 
   const addPart = useCallback(() => {
     if (parts.length >= MAX_PARTS) return
-    const np = { id: `p${parts.length}_${Date.now()}`, baseShape: 'sphere', color: DEFAULT_COLORS[parts.length % 3], textLabel: '', partScale: 1.0, transform: { x: 0, y: 0, z: 0 } }
+    const np = mkPart(parts.length)
     setParts(prev => [...prev, np])
     setSelectedId(np.id)
+    setPanel('sculpt')
   }, [parts.length])
 
   const removePart = useCallback((id) => {
@@ -261,52 +391,106 @@ const SculptStudio = forwardRef((_props, ref) => {
     updatePart(selectedId, { transform: { ...selectedPart.transform, [axis]: val } })
   }, [selectedId, selectedPart, updatePart])
 
+  const BASE_COLORS = ['#FFB0B0','#FFDC8C','#FFF8A0','#B0EEB8','#B0C8FF','#D8B0FF','#FFB8D8','#F5F5F5']
+
+  const iconBtn = (id) => ({
+    width: 30, height: 30, borderRadius: 9, cursor: 'pointer', padding: 0, fontSize: 14,
+    border: panel === id ? '2px solid #C68B4A' : '2px solid #E8D8C0',
+    background: panel === id ? '#FFF0D8' : 'white',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  })
+
+  const panelBox = { marginBottom: 8, background: '#FFF9F0', borderRadius: 10, padding: '8px 10px', border: '1.5px solid #E8D8C0' }
+
   return (
     <div style={{ fontFamily: "'Nunito', sans-serif" }}>
 
-      {/* 3-D canvas */}
-      <div style={{ width: '100%', height: 220, borderRadius: 14, overflow: 'hidden', background: 'linear-gradient(135deg,#FFF9EC,#FFE8C0)', border: '2px solid #E8D8C0', marginBottom: 10 }}>
-        <Canvas camera={{ position: [0, 0.4, 4.2], fov: 44 }} gl={{ antialias: true, alpha: true }} style={{ touchAction: 'none' }}>
-          <ambientLight intensity={0.9} color="#fff8f0" />
-          <directionalLight position={[3, 4, 3]} intensity={1.2} />
-          <hemisphereLight skyColor="#FFF9EC" groundColor="#C68B4A" intensity={0.35} />
-          {parts.map(part => (
-            <PartMesh
-              key={part.id}
-              ref={el => { el ? partRefs.current[part.id] = el : delete partRefs.current[part.id] }}
-              part={part}
-              isSelected={part.id === selectedId}
-              mode={mode}
-              brushRadius={brushRadius}
-              paintColor={paintColor}
-              orbitRef={orbitRef}
-              onSelect={setSelectedId}
-            />
+      {/* Canvas row + right sidebar */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'flex-start' }}>
+
+        {/* 3-D canvas */}
+        <div style={{ flex: 1, height: 220, borderRadius: 14, overflow: 'hidden', background: 'linear-gradient(135deg,#FFF9EC,#FFE8C0)', border: '2px solid #E8D8C0' }}>
+          <Canvas camera={{ position: [0, 0.4, 4.2], fov: 44 }} gl={{ antialias: true, alpha: true }} style={{ touchAction: 'none' }}>
+            <ambientLight intensity={0.9} color="#fff8f0" />
+            <directionalLight position={[3, 4, 3]} intensity={1.2} />
+            <hemisphereLight skyColor="#FFF9EC" groundColor="#C68B4A" intensity={0.35} />
+            {parts.map(part => (
+              <PartMesh
+                key={part.id}
+                ref={el => { el ? partRefs.current[part.id] = el : delete partRefs.current[part.id] }}
+                part={part}
+                isSelected={part.id === selectedId}
+                panel={panel}
+                brushRadius={brushRadius}
+                paintColor={paintColor}
+                orbitRef={orbitRef}
+                onSelect={setSelectedId}
+                showWireframe={showWireframe}
+              />
+            ))}
+            <FaceOverlay parts={parts} faceExpression={faceExpression} faceAngle={faceAngle} faceElevation={faceElevation} faceOffsetX={faceOffsetX} faceOffsetY={faceOffsetY} />
+            <OrbitControls ref={orbitRef} enableZoom={false} enablePan={false} />
+          </Canvas>
+        </div>
+
+        {/* Right sidebar icons */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {SIDEBAR_ICONS.map(ico => (
+            <button key={ico.id} onClick={() => setPanel(ico.id)} title={ico.title} style={iconBtn(ico.id)}>
+              {ico.emoji}
+            </button>
           ))}
-          <OrbitControls ref={orbitRef} enableZoom={false} enablePan={false} />
-        </Canvas>
+          {/* Wireframe toggle — visually distinct from panel buttons */}
+          <div style={{ marginTop: 6, borderTop: '1.5px solid #E8D8C0', paddingTop: 5 }}>
+            <button
+              onClick={() => setShowWireframe(w => !w)}
+              title={showWireframe ? 'Hide Wireframe' : 'Show Wireframe'}
+              style={{
+                width: 30, padding: '4px 0', borderRadius: 8, cursor: 'pointer',
+                border: showWireframe ? '2px solid #D4AA00' : '2px dashed #C8C0A0',
+                background: showWireframe ? '#FFFBE0' : '#F8F7F2',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+              }}
+            >
+              <span style={{ fontSize: 13, lineHeight: 1 }}>⬡</span>
+              <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: '0.02em', color: showWireframe ? '#8A6A00' : '#A09870' }}>WIRE</span>
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Mode tabs */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-        <button style={tabBtn(mode==='sculpt')} onClick={() => setMode('sculpt')}>✍️ Sculpt</button>
-        <button style={tabBtn(mode==='paint')}  onClick={() => setMode('paint')}>🎨 Paint</button>
-        <button style={tabBtn(mode==='text')}   onClick={() => setMode('text')}>🔤 Text</button>
+      {/* Parts row */}
+      <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#A07040', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Parts</span>
+        {parts.map((p, i) => (
+          <button key={p.id} onClick={() => setSelectedId(p.id)} style={{
+            flex: 1, padding: '4px 3px', borderRadius: 8, cursor: 'pointer', position: 'relative',
+            border: p.id===selectedId ? '2px solid #C68B4A' : '2px solid #E8D8C0',
+            background: p.id===selectedId ? '#FFF0D8' : 'white',
+            fontSize: 11, color: '#7A4A18',
+          }}>
+            <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: p.color, marginRight: 3, verticalAlign: 'middle', border: '1px solid #ccc' }} />
+            {i+1}
+            {parts.length > 1 && p.id===selectedId && (
+              <span onClick={e => { e.stopPropagation(); removePart(p.id) }}
+                style={{ position: 'absolute', top: -6, right: -6, width: 14, height: 14, borderRadius: '50%', background: '#D03030', color: 'white', fontSize: 10, lineHeight: '14px', textAlign: 'center', cursor: 'pointer', zIndex: 1 }}>×</span>
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* Sculpt controls */}
-      {mode === 'sculpt' && (
-        <div style={{ marginBottom: 10, background: '#FFF9F0', borderRadius: 10, padding: '8px 10px', border: '1.5px solid #E8D8C0' }}>
+      {/* ── Sculpt panel ── */}
+      {panel === 'sculpt' && (
+        <div style={panelBox}>
           <span style={LABEL}>Brush Size</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 10, color: '#C8A070' }}>S</span>
             <input type="range" min={0.18} max={1.2} step={0.04} value={brushRadius}
-              onChange={e => setBrushRadius(+e.target.value)}
-              style={{ flex: 1, accentColor: '#C68B4A' }} />
+              onChange={e => setBrushRadius(+e.target.value)} style={{ flex: 1, accentColor: '#C68B4A' }} />
             <span style={{ fontSize: 10, color: '#C8A070' }}>L</span>
           </div>
           <div style={{ fontSize: 9, color: '#B09070', marginTop: 3, textAlign: 'center' }}>
-            Drag UP to inflate · DOWN to indent · orbit to rotate view
+            Drag UP to inflate · DOWN to indent · orbit to rotate
           </div>
           <button onClick={() => partRefs.current[selectedId]?.resetSculpt()}
             style={{ marginTop: 5, width: '100%', padding: '4px', fontSize: 9, borderRadius: 6, border: '1.5px solid #E8D8C0', background: 'white', color: '#A07040', cursor: 'pointer' }}>
@@ -315,9 +499,9 @@ const SculptStudio = forwardRef((_props, ref) => {
         </div>
       )}
 
-      {/* Paint controls */}
-      {mode === 'paint' && (
-        <div style={{ marginBottom: 10, background: '#FFF9F0', borderRadius: 10, padding: '8px 10px', border: '1.5px solid #E8D8C0' }}>
+      {/* ── Paint panel ── */}
+      {panel === 'paint' && (
+        <div style={panelBox}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 7 }}>
             {PAINT_SWATCHES.map(c => (
               <button key={c} onClick={() => setPaintColor(c)} style={{
@@ -335,8 +519,7 @@ const SculptStudio = forwardRef((_props, ref) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 10, color: '#C8A070' }}>S</span>
             <input type="range" min={0.1} max={0.9} step={0.04} value={brushRadius}
-              onChange={e => setBrushRadius(+e.target.value)}
-              style={{ flex: 1, accentColor: '#C68B4A' }} />
+              onChange={e => setBrushRadius(+e.target.value)} style={{ flex: 1, accentColor: '#C68B4A' }} />
             <span style={{ fontSize: 10, color: '#C8A070' }}>L</span>
             <button onClick={() => partRefs.current[selectedId]?.resetPaint()}
               style={{ padding: '3px 8px', fontSize: 9, borderRadius: 6, border: '1.5px solid #E8D8C0', background: 'white', color: '#A07040', cursor: 'pointer' }}>
@@ -346,52 +529,89 @@ const SculptStudio = forwardRef((_props, ref) => {
         </div>
       )}
 
-      {/* Text controls */}
-      {mode === 'text' && (
-        <div style={{ marginBottom: 10, background: '#FFF9F0', borderRadius: 10, padding: '8px 10px', border: '1.5px solid #E8D8C0' }}>
+      {/* ── Text panel ── */}
+      {panel === 'text' && selectedPart && (
+        <div style={panelBox}>
           <span style={LABEL}>Text on Squishy</span>
           <input
             type="text" placeholder="Write something cute..." maxLength={16}
-            value={selectedPart?.textLabel ?? ''}
+            value={selectedPart.textLabel ?? ''}
             onChange={e => updatePart(selectedId, { textLabel: e.target.value })}
-            style={{ width: '100%', padding: '8px 11px', borderRadius: 9, border: '2px solid #E8D8C0', fontFamily: "'Nunito',sans-serif", fontSize: 14, color: '#7A4A18', background: 'white', outline: 'none', boxSizing: 'border-box' }}
+            style={{ width: '100%', padding: '7px 10px', borderRadius: 9, border: '2px solid #E8D8C0', fontFamily: "'Nunito',sans-serif", fontSize: 13, color: '#7A4A18', background: 'white', outline: 'none', boxSizing: 'border-box', marginBottom: 8 }}
           />
-          <div style={{ fontSize: 9, color: '#B09070', marginTop: 4, textAlign: 'center' }}>Text appears on the front of the selected part</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#A07040', flexShrink: 0 }}>COLOR</span>
+            {['#1A1A1A','#FF3B3B','#007AFF','#34C759','#FF9500','#FFFFFF'].map(c => (
+              <button key={c} onClick={() => updatePart(selectedId, { textColor: c })} style={{
+                width: 22, height: 22, borderRadius: '50%', background: c, cursor: 'pointer',
+                border: (selectedPart.textColor ?? '#1A1A1A') === c ? '3px solid #C68B4A' : '2px solid #CCC',
+              }} />
+            ))}
+            <label style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'conic-gradient(red,yellow,lime,cyan,blue,magenta,red)', border: '2px solid #E8D8C0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>+</div>
+              <input type="color" value={selectedPart.textColor ?? '#1A1A1A'} onChange={e => updatePart(selectedId, { textColor: e.target.value })} style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} />
+            </label>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#A07040', flexShrink: 0, width: 34 }}>SIZE</span>
+            <input type="range" min={0.4} max={1.6} step={0.1} value={selectedPart.textSize ?? 1.0}
+              onChange={e => updatePart(selectedId, { textSize: +e.target.value })} style={{ flex: 1, accentColor: '#C68B4A' }} />
+            <span style={{ fontSize: 10, color: '#B09070', minWidth: 24 }}>{((selectedPart.textSize ?? 1.0) * 100).toFixed(0)}%</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#E04040', width: 34, flexShrink: 0 }}>X</span>
+            <input type="range" min={-0.6} max={0.6} step={0.05} value={selectedPart.textOffsetX ?? 0}
+              onChange={e => updatePart(selectedId, { textOffsetX: +e.target.value })} style={{ flex: 1, accentColor: '#E04040' }} />
+            <span style={{ fontSize: 10, color: '#B09070', minWidth: 28 }}>{(selectedPart.textOffsetX ?? 0).toFixed(2)}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#208820', width: 34, flexShrink: 0 }}>Y</span>
+            <input type="range" min={-0.6} max={0.6} step={0.05} value={selectedPart.textOffsetY ?? 0}
+              onChange={e => updatePart(selectedId, { textOffsetY: +e.target.value })} style={{ flex: 1, accentColor: '#208820' }} />
+            <span style={{ fontSize: 10, color: '#B09070', minWidth: 28 }}>{(selectedPart.textOffsetY ?? 0).toFixed(2)}</span>
+          </div>
         </div>
       )}
 
-      {/* Parts row */}
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: '#A07040', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Parts</span>
-        {parts.map((p, i) => (
-          <button key={p.id} onClick={() => setSelectedId(p.id)} style={{
-            flex: 1, padding: '5px 4px', borderRadius: 8, cursor: 'pointer', position: 'relative',
-            border: p.id===selectedId ? '2px solid #C68B4A' : '2px solid #E8D8C0',
-            background: p.id===selectedId ? '#FFF0D8' : 'white',
-            fontSize: 11, color: '#7A4A18',
-          }}>
-            <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: p.color, marginRight: 3, verticalAlign: 'middle', border: '1px solid #ccc' }} />
-            {i+1}
-            {parts.length > 1 && p.id===selectedId && (
-              <span onClick={e => { e.stopPropagation(); removePart(p.id) }}
-                style={{ position: 'absolute', top: -6, right: -6, width: 14, height: 14, borderRadius: '50%', background: '#D03030', color: 'white', fontSize: 10, lineHeight: '14px', textAlign: 'center', cursor: 'pointer', zIndex: 1 }}>×</span>
-            )}
+      {/* ── Add panel ── */}
+      {panel === 'add' && (
+        <div style={panelBox}>
+          <span style={LABEL}>Add Part</span>
+          {parts.length < MAX_PARTS ? (
+            <button onClick={addPart} style={{ width: '100%', padding: '10px', borderRadius: 10, border: '2px dashed #C68B4A', background: 'white', cursor: 'pointer', fontFamily: "'Fredoka One', cursive", fontSize: 14, color: '#7A4A18' }}>
+              ➕ Add Another Part
+            </button>
+          ) : (
+            <div style={{ textAlign: 'center', fontSize: 11, color: '#C8A070', padding: '6px 0' }}>Max {MAX_PARTS} parts reached</div>
+          )}
+        </div>
+      )}
+
+      {/* ── Position panel ── */}
+      {panel === 'position' && selectedPart && (
+        <div style={panelBox}>
+          <span style={LABEL}>Position (X · Y · Z)</span>
+          {['x','y','z'].map(axis => (
+            <div key={axis} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: axis==='x'?'#E04040':axis==='y'?'#208820':'#3060D0', width: 14 }}>{axis.toUpperCase()}</span>
+              <input type="range" min={-2} max={2} step={0.05}
+                value={selectedPart.transform[axis]}
+                onChange={e => setTransform(axis, +e.target.value)}
+                style={{ flex: 1, accentColor: axis==='x'?'#E04040':axis==='y'?'#208820':'#3060D0' }}
+              />
+              <span style={{ fontSize: 10, color: '#B09070', minWidth: 32, textAlign: 'right' }}>{selectedPart.transform[axis].toFixed(2)}</span>
+            </div>
+          ))}
+          <button onClick={() => updatePart(selectedId, { transform: { x: 0, y: 0, z: 0 } })}
+            style={{ marginTop: 4, width: '100%', padding: '3px', fontSize: 9, borderRadius: 6, border: '1.5px solid #E8D8C0', background: 'white', color: '#A07040', cursor: 'pointer' }}>
+            Reset Position
           </button>
-        ))}
-        {parts.length < MAX_PARTS && (
-          <button onClick={addPart} style={{
-            flex: 1, padding: '5px 4px', borderRadius: 8, cursor: 'pointer',
-            border: '2px dashed #E8D8C0', background: 'white',
-            fontSize: 11, color: '#B09070',
-          }}>+ Add</button>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Selected part details */}
-      {selectedPart && (
-        <div style={{ background: '#FFF9F0', borderRadius: 10, padding: '10px 10px 8px', border: '1.5px solid #E8D8C0' }}>
-
-          {/* Base shape */}
+      {/* ── Color + Shape panel ── */}
+      {panel === 'color' && selectedPart && (
+        <div style={panelBox}>
           <span style={LABEL}>Base Shape</span>
           <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
             {COMPOSED_SHAPES.map(s => (
@@ -406,11 +626,9 @@ const SculptStudio = forwardRef((_props, ref) => {
               </button>
             ))}
           </div>
-
-          {/* Base color */}
           <span style={LABEL}>Base Color</span>
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10 }}>
-            {['#FFB0B0','#FFDC8C','#FFF8A0','#B0EEB8','#B0C8FF','#D8B0FF','#FFB8D8','#F5F5F5'].map(c => (
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+            {BASE_COLORS.map(c => (
               <button key={c} onClick={() => updatePart(selectedId, { color: c })} style={{
                 width: 25, height: 25, borderRadius: '50%', background: c, cursor: 'pointer',
                 border: selectedPart.color===c ? '3px solid #7A4A18' : '2px solid #E8D8C0',
@@ -421,12 +639,16 @@ const SculptStudio = forwardRef((_props, ref) => {
               <input type="color" value={selectedPart.color} onChange={e => updatePart(selectedId, { color: e.target.value })} style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} />
             </label>
           </div>
+        </div>
+      )}
 
-          {/* Per-piece size */}
+      {/* ── Size panel ── */}
+      {panel === 'size' && selectedPart && (
+        <div style={panelBox}>
           <span style={LABEL}>
             Size — <span style={{ fontWeight: 900, color: '#C68B4A' }}>{partSizeLabel(selectedPart.partScale ?? 1)}</span>
           </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <span style={{ fontSize: 10, color: '#C8A070' }}>XS</span>
             <input type="range" min={0.3} max={2.0} step={0.05}
               value={selectedPart.partScale ?? 1}
@@ -435,26 +657,13 @@ const SculptStudio = forwardRef((_props, ref) => {
             />
             <span style={{ fontSize: 10, color: '#C8A070' }}>XL</span>
           </div>
-
-          {/* X / Y / Z position sliders */}
-          <span style={LABEL}>Position (X · Y · Z)</span>
-          {['x','y','z'].map(axis => (
-            <div key={axis} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <span style={{ fontSize: 10, fontWeight: 800, color: axis==='x'?'#E04040':axis==='y'?'#208820':'#3060D0', width: 12 }}>{axis.toUpperCase()}</span>
-              <input type="range" min={-2} max={2} step={0.05}
-                value={selectedPart.transform[axis]}
-                onChange={e => setTransform(axis, +e.target.value)}
-                style={{ flex: 1, accentColor: axis==='x'?'#E04040':axis==='y'?'#208820':'#3060D0' }}
-              />
-              <span style={{ fontSize: 10, color: '#B09070', minWidth: 32, textAlign: 'right' }}>{selectedPart.transform[axis].toFixed(2)}</span>
-            </div>
-          ))}
-          <button onClick={() => updatePart(selectedId, { transform: { x: 0, y: 0, z: 0 }, partScale: 1.0 })}
-            style={{ marginTop: 5, width: '100%', padding: '3px', fontSize: 9, borderRadius: 6, border: '1.5px solid #E8D8C0', background: 'white', color: '#A07040', cursor: 'pointer' }}>
-            Reset Position & Size
+          <button onClick={() => updatePart(selectedId, { partScale: 1.0 })}
+            style={{ width: '100%', padding: '3px', fontSize: 9, borderRadius: 6, border: '1.5px solid #E8D8C0', background: 'white', color: '#A07040', cursor: 'pointer' }}>
+            Reset Size
           </button>
         </div>
       )}
+
     </div>
   )
 })

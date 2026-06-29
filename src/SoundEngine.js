@@ -1,18 +1,32 @@
 let ctx = null
 
-function getCtx() {
-  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)()
-  if (ctx.state === 'suspended') ctx.resume()
+async function getCtx() {
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)()
+  }
+  if (ctx.state === 'suspended') {
+    // Must await — iOS starts AudioContext suspended and resume() is async.
+    // Without the await, currentTime is still frozen when we schedule nodes.
+    await ctx.resume()
+    // Silent buffer: unlocks audio on older iOS Safari (pre-13) where
+    // resume() alone isn't enough — must start a BufferSource in the gesture.
+    try {
+      const silence = ctx.createBuffer(1, 1, ctx.sampleRate)
+      const src = ctx.createBufferSource()
+      src.buffer = silence
+      src.connect(ctx.destination)
+      src.start(0)
+    } catch (_) {}
+  }
   return ctx
 }
 
 // Squishy foam press — soft rubbery thud + air-escape noise ~200ms
-export function playSquish() {
+export async function playSquish() {
   try {
-    const c = getCtx()
+    const c = await getCtx()
     const t = c.currentTime
 
-    // Low body thud: pitch drops like foam compressing
     const osc = c.createOscillator()
     osc.type = 'sine'
     osc.frequency.setValueAtTime(180, t)
@@ -24,7 +38,6 @@ export function playSquish() {
     osc.connect(oscGain); oscGain.connect(c.destination)
     osc.start(t); osc.stop(t + 0.22)
 
-    // Soft noise burst: air squeezing out of the foam
     const nLen = Math.ceil(c.sampleRate * 0.16)
     const nBuf = c.createBuffer(1, nLen, c.sampleRate)
     const nd = nBuf.getChannelData(0)
@@ -41,9 +54,9 @@ export function playSquish() {
 }
 
 // ASMR wax/ice crack — rapid micro-bursts of high-frequency noise
-export function playCrack() {
+export async function playCrack() {
   try {
-    const c = getCtx()
+    const c = await getCtx()
     const t = c.currentTime
     const len = Math.ceil(c.sampleRate * 0.06)
     for (let i = 0; i < 5; i++) {

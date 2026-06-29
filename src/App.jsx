@@ -84,7 +84,7 @@ export default function App() {
         <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 700, color: '#C68B4A', letterSpacing: '0.18em', textTransform: 'uppercase', textAlign: 'center' }}>
           Invisible Hand
         </p>
-        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'nowrap' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6, maxWidth: 560, width: '100%', margin: '0 auto' }}>
           {HAND_MOVES.map(m => (
             <button
               key={m.style}
