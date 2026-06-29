@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { Text } from '@react-three/drei'
 import * as THREE from 'three'
 import { playSquish, playCrack } from '../SoundEngine'
-import { buildComposedGeo, makeVertexColors, getFrontZ, computeWeldedNormals } from '../data/shapes'
+import { buildComposedGeo, makeVertexColors, getFrontZ, computeWeldedNormals, buildVertexGroups, applyWeldedNormals } from '../data/shapes'
 
 const SEGS = 26  // higher = smoother wrinkles
 
@@ -507,7 +507,8 @@ function buildMergedComposedGeo(composition) {
   out.setAttribute('color',    new THREE.BufferAttribute(colArr, 3))
   computeWeldedNormals(out)
   const baseNormals = out.attributes.normal.array.slice()
-  return { geo: out, basePositions: posArr, baseNormals }
+  const vertexGroups = buildVertexGroups(posArr)
+  return { geo: out, basePositions: posArr, baseNormals, vertexGroups }
 }
 
 function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
@@ -525,7 +526,7 @@ function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
   const composition = toy.composition ?? []
   const primary     = composition[toy.facePieceIndex ?? 0] ?? composition[0]
 
-  const { geo: mergedGeo, basePositions, baseNormals } = useMemo(
+  const { geo: mergedGeo, basePositions, baseNormals, vertexGroups } = useMemo(
     () => buildMergedComposedGeo(composition),
     [toy.id] // eslint-disable-line react-hooks/exhaustive-deps
   )
@@ -735,7 +736,7 @@ function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
       const posAttr = meshRef.current.geometry.attributes.position
       const updated = accumulateSquishes(basePositions, squishesRef.current, now)
       posAttr.array.set(updated); posAttr.needsUpdate = true
-      meshRef.current.geometry.computeVertexNormals()
+      applyWeldedNormals(meshRef.current.geometry, vertexGroups)
       if (faceGroupRef.current && faceVertexIndices.length > 0) {
         let sx = 0, sy = 0, sz = 0
         for (const idx of faceVertexIndices) { sx += updated[idx]; sy += updated[idx+1]; sz += updated[idx+2] }
