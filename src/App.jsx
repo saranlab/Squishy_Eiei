@@ -4,9 +4,19 @@ import ToyPicker from './components/ToyPicker'
 import SquishyCreator from './components/SquishyCreator'
 import CommunityPage from './components/CommunityPage'
 import { TOYS } from './data/toys'
+import { compressToy, hydrateToy } from './lib/toyCompression'
 
 function loadCustomToys() {
-  try { return JSON.parse(localStorage.getItem('customToys') || '[]') } catch { return [] }
+  try {
+    const raw = JSON.parse(localStorage.getItem('customToys') || '[]')
+    return raw.map(t => hydrateToy(t))
+  } catch { return [] }
+}
+
+function saveCustomToys(toys) {
+  try {
+    localStorage.setItem('customToys', JSON.stringify(toys.map(t => compressToy(t))))
+  } catch { /* quota exceeded — silently skip */ }
 }
 
 const HAND_MOVES = [
@@ -36,7 +46,7 @@ export default function App() {
   function handleAddToy(toy) {
     const next = [...customToys, toy]
     setCustomToys(next)
-    localStorage.setItem('customToys', JSON.stringify(next))
+    saveCustomToys(next)
     setSelectedToy(toy)
   }
 

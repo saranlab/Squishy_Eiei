@@ -2,7 +2,7 @@ import { forwardRef, useRef, useMemo, useCallback, useEffect, useState, useImper
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
-import { COMPOSED_SHAPES, buildComposedGeo, getFrontZ, hexToRgb, makeVertexColors } from '../data/shapes'
+import { COMPOSED_SHAPES, buildComposedGeo, getFrontZ, hexToRgb, makeVertexColors, computeWeldedNormals } from '../data/shapes'
 
 const MAX_PARTS = 3
 const DEFAULT_COLORS = ['#FFB0B0', '#B0C8FF', '#B0FFB8']
@@ -128,7 +128,7 @@ const PartMesh = forwardRef(({ part, isSelected, panel, brushRadius, paintColor,
       posRef.current = new Float32Array(g.attributes.position.array)
       geo.attributes.position.array.set(posRef.current)
       geo.attributes.position.needsUpdate = true
-      geo.computeVertexNormals()
+      computeWeldedNormals(geo)
     },
     resetPaint() {
       const [r, g, b] = hexToRgb(part.color)
@@ -170,7 +170,7 @@ const PartMesh = forwardRef(({ part, isSelected, panel, brushRadius, paintColor,
         posRef.current = applyBrush(posRef.current, d.lx, d.ly, d.lz, d.nx, d.ny, d.nz, delta, brushRadius)
         geo.attributes.position.array.set(posRef.current)
         geo.attributes.position.needsUpdate = true
-        geo.computeVertexNormals()
+        computeWeldedNormals(geo)
       }
     } else if (panel === 'paint') {
       const local = meshRef.current.worldToLocal(e.point.clone())

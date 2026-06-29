@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { Text } from '@react-three/drei'
 import * as THREE from 'three'
 import { playSquish, playCrack } from '../SoundEngine'
-import { buildComposedGeo, makeVertexColors, getFrontZ } from '../data/shapes'
+import { buildComposedGeo, makeVertexColors, getFrontZ, computeWeldedNormals } from '../data/shapes'
 
 const SEGS = 26  // higher = smoother wrinkles
 
@@ -461,31 +461,34 @@ function Accessories({ toy }) {
 function buildMergedComposedGeo(composition) {
   const geos = []
   for (const part of (composition ?? [])) {
-    const g = buildComposedGeo(part.baseShape ?? 'sphere')
-    if (part.positions?.length === g.attributes.position.array.length) {
-      g.attributes.position.array.set(new Float32Array(part.positions))
-      g.attributes.position.needsUpdate = true
-      g.computeVertexNormals()
+    let g
+    const savedPos = Array.isArray(part.positions) && part.positions.length >= 9 && part.positions.length % 9 === 0
+    if (savedPos) {
+      // Use stored sculpt positions directly — length-agnostic (works across CS changes)
+      g = new THREE.BufferGeometry()
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(part.positions), 3))
+    } else {
+      g = buildComposedGeo(part.baseShape ?? 'sphere')
     }
     const cnt = g.attributes.position.count
-    const col = (part.vertexColors?.length === cnt * 3)
+    const col = (Array.isArray(part.vertexColors) && part.vertexColors.length === cnt * 3)
       ? new Float32Array(part.vertexColors)
       : makeVertexColors(g, part.color ?? '#FFB0B0')
     g.setAttribute('color', new THREE.BufferAttribute(col, 3))
-    const ni = g.toNonIndexed(); g.dispose()
-    const pos = ni.attributes.position
+    computeWeldedNormals(g)
+    const pos = g.attributes.position
     const sc = part.partScale ?? 1
     const tx = part.transform?.x ?? 0, ty = part.transform?.y ?? 0, tz = part.transform?.z ?? 0
     for (let i = 0; i < pos.count; i++)
       pos.setXYZ(i, pos.getX(i)*sc+tx, pos.getY(i)*sc+ty, pos.getZ(i)*sc+tz)
     pos.needsUpdate = true
-    ni.computeVertexNormals()
-    geos.push(ni)
+    geos.push(g)
   }
   if (!geos.length) {
-    const g = new THREE.SphereGeometry(1, 16, 16)
+    const g = new THREE.SphereGeometry(1, 32, 32)
     g.setAttribute('color', new THREE.BufferAttribute(makeVertexColors(g, '#FFB0B0'), 3))
     const ni = g.toNonIndexed(); g.dispose()
+    computeWeldedNormals(ni)
     geos.push(ni)
   }
   let total = 0
@@ -502,7 +505,7 @@ function buildMergedComposedGeo(composition) {
   const out = new THREE.BufferGeometry()
   out.setAttribute('position', new THREE.BufferAttribute(posArr.slice(), 3))
   out.setAttribute('color',    new THREE.BufferAttribute(colArr, 3))
-  out.computeVertexNormals()
+  computeWeldedNormals(out)
   return { geo: out, basePositions: posArr }
 }
 
