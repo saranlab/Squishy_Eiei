@@ -356,7 +356,7 @@ const SculptStudio = forwardRef(({ faceExpression = 'smile', faceAngle = 0, face
   const [selectedId, setSelectedId] = useState(() => parts[0].id)
   const [panel, setPanel] = useState('sculpt')
   const [showWireframe, setShowWireframe] = useState(true)
-  const [brushRadius, setBrushRadius] = useState(0.55)
+  const [brushRadius, setBrushRadius] = useState(0.35)
   const [paintColor, setPaintColor] = useState('#FF3B3B')
 
   const orbitRef = useRef()
@@ -485,7 +485,7 @@ const SculptStudio = forwardRef(({ faceExpression = 'smile', faceAngle = 0, face
           <span style={LABEL}>Brush Size</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 10, color: '#C8A070' }}>S</span>
-            <input type="range" min={0.18} max={1.2} step={0.04} value={brushRadius}
+            <input type="range" min={0.06} max={1.2} step={0.02} value={brushRadius}
               onChange={e => setBrushRadius(+e.target.value)} style={{ flex: 1, accentColor: '#C68B4A' }} />
             <span style={{ fontSize: 10, color: '#C8A070' }}>L</span>
           </div>
@@ -518,7 +518,7 @@ const SculptStudio = forwardRef(({ faceExpression = 'smile', faceAngle = 0, face
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 10, color: '#C8A070' }}>S</span>
-            <input type="range" min={0.1} max={0.9} step={0.04} value={brushRadius}
+            <input type="range" min={0.04} max={0.9} step={0.02} value={brushRadius}
               onChange={e => setBrushRadius(+e.target.value)} style={{ flex: 1, accentColor: '#C68B4A' }} />
             <span style={{ fontSize: 10, color: '#C8A070' }}>L</span>
             <button onClick={() => partRefs.current[selectedId]?.resetPaint()}
