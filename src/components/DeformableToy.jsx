@@ -506,7 +506,8 @@ function buildMergedComposedGeo(composition) {
   out.setAttribute('position', new THREE.BufferAttribute(posArr.slice(), 3))
   out.setAttribute('color',    new THREE.BufferAttribute(colArr, 3))
   computeWeldedNormals(out)
-  return { geo: out, basePositions: posArr }
+  const baseNormals = out.attributes.normal.array.slice()
+  return { geo: out, basePositions: posArr, baseNormals }
 }
 
 function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
@@ -524,7 +525,7 @@ function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
   const composition = toy.composition ?? []
   const primary     = composition[toy.facePieceIndex ?? 0] ?? composition[0]
 
-  const { geo: mergedGeo, basePositions } = useMemo(
+  const { geo: mergedGeo, basePositions, baseNormals } = useMemo(
     () => buildMergedComposedGeo(composition),
     [toy.id] // eslint-disable-line react-hooks/exhaustive-deps
   )
@@ -743,12 +744,15 @@ function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
       }
     } else {
       if (wasActiveRef.current) {
-        // Squish just finished — restore smooth welded normals
+        // Squish just finished — restore rest positions and pre-computed smooth normals
         wasActiveRef.current = false
-        const posAttr = meshRef.current.geometry.attributes.position
+        const geo = meshRef.current.geometry
+        const posAttr = geo.attributes.position
         posAttr.array.set(basePositions)
         posAttr.needsUpdate = true
-        computeWeldedNormals(meshRef.current.geometry)
+        const normAttr = geo.attributes.normal
+        normAttr.array.set(baseNormals)
+        normAttr.needsUpdate = true
       }
       if (faceGroupRef.current) {
         const fp = faceGroupRef.current.position
