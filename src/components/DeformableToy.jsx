@@ -513,6 +513,7 @@ function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
   const meshRef       = useRef()
   const faceGroupRef  = useRef()
   const squishesRef   = useRef([])
+  const wasActiveRef  = useRef(false)
   const [face, setFace]     = useState('normal')
   const [cracks, setCracks] = useState([])
   const riseTimerRef  = useRef(null)
@@ -729,6 +730,7 @@ function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
     const now = performance.now()
     const active = squishesRef.current.some(s => s.held || (now - s.releaseTime) < s.duration)
     if (active) {
+      wasActiveRef.current = true
       const posAttr = meshRef.current.geometry.attributes.position
       const updated = accumulateSquishes(basePositions, squishesRef.current, now)
       posAttr.array.set(updated); posAttr.needsUpdate = true
@@ -739,11 +741,21 @@ function ComposedToy({ toy, onFaceChange, pendingMove, waxed }) {
         const n = faceVertexIndices.length
         faceGroupRef.current.position.set(sx/n, sy/n, sz/n)
       }
-    } else if (faceGroupRef.current) {
-      const fp = faceGroupRef.current.position
-      fp.x += (facePosBase[0] - fp.x) * 0.12
-      fp.y += (facePosBase[1] - fp.y) * 0.12
-      fp.z += (facePosBase[2] - fp.z) * 0.12
+    } else {
+      if (wasActiveRef.current) {
+        // Squish just finished — restore smooth welded normals
+        wasActiveRef.current = false
+        const posAttr = meshRef.current.geometry.attributes.position
+        posAttr.array.set(basePositions)
+        posAttr.needsUpdate = true
+        computeWeldedNormals(meshRef.current.geometry)
+      }
+      if (faceGroupRef.current) {
+        const fp = faceGroupRef.current.position
+        fp.x += (facePosBase[0] - fp.x) * 0.12
+        fp.y += (facePosBase[1] - fp.y) * 0.12
+        fp.z += (facePosBase[2] - fp.z) * 0.12
+      }
     }
   })
 
