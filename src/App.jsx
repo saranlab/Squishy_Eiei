@@ -34,6 +34,7 @@ export default function App() {
   const [selectedToy,   setSelectedToy]   = useState(TOYS[0])
   const [creatorOpen,   setCreatorOpen]   = useState(false)
   const [communityOpen, setCommunityOpen] = useState(false)
+  const [communityShare,setCommunityShare]= useState(false)
   const [pendingMove,   setPendingMove]   = useState(null)
   const [waxed,         setWaxed]         = useState(false)
   const [lang,          setLang]          = useState(() => localStorage.getItem('squishy_lang') || 'en')
@@ -85,10 +86,11 @@ export default function App() {
             onClick={toggleLang}
             style={{
               position: 'absolute', right: 16,
-              padding: '4px 10px', borderRadius: 999,
-              border: '1.5px solid #E8D8C0', background: 'white',
-              fontFamily: "'Nunito', sans-serif", fontSize: 11, fontWeight: 700,
-              color: '#A07040', cursor: 'pointer',
+              padding: '7px 14px', borderRadius: 999,
+              border: '2px solid #C68B4A', background: 'white',
+              fontFamily: "'Fredoka One', cursive", fontSize: 14, fontWeight: 700,
+              color: '#7A4A18', cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(198,139,74,0.15)',
             }}
           >
             🌐 {t('lang_toggle')}
@@ -146,24 +148,40 @@ export default function App() {
           <ToyPicker toys={allToys} selectedId={selectedToy.id} onSelect={handleSelectToy} />
         </div>
 
-        {/* Create button */}
-        <div style={{ textAlign: 'center', padding: '6px 16px 10px', flexShrink: 0 }}>
-          <button
-            onClick={() => setCreatorOpen(true)}
-            style={{
-              padding: '8px 20px', borderRadius: 999, border: '2px solid #C68B4A',
-              background: 'white', fontFamily: "'Fredoka One', cursive", fontSize: 14,
-              color: '#7A4A18', cursor: 'pointer', boxShadow: '0 2px 8px rgba(198,139,74,0.15)',
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = '#FFF0D8'}
-            onMouseLeave={e => e.currentTarget.style.background = 'white'}
-          >
-            {t('create_btn')}
-          </button>
+        {/* Create + Share buttons */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, padding: '6px 16px 10px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <button
+              onClick={() => setCreatorOpen(true)}
+              style={{
+                padding: '8px 20px', borderRadius: 999, border: '2px solid #C68B4A',
+                background: 'white', fontFamily: "'Fredoka One', cursive", fontSize: 14,
+                color: '#7A4A18', cursor: 'pointer', boxShadow: '0 2px 8px rgba(198,139,74,0.15)',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#FFF0D8'}
+              onMouseLeave={e => e.currentTarget.style.background = 'white'}
+            >
+              {t('create_btn')}
+            </button>
+            <button
+              onClick={() => { setCommunityShare(true); setCommunityOpen(true) }}
+              style={{
+                padding: '8px 18px', borderRadius: 999,
+                border: '2px solid #C68B4A',
+                background: 'linear-gradient(135deg,#FFF0D8,#FFE0B0)',
+                fontFamily: "'Fredoka One', cursive", fontSize: 14,
+                color: '#7A4A18', cursor: 'pointer', boxShadow: '0 2px 8px rgba(198,139,74,0.15)',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#FFE0B0'}
+              onMouseLeave={e => e.currentTarget.style.background = 'linear-gradient(135deg,#FFF0D8,#FFE0B0)'}
+            >
+              ✨ {t('btn_share')}
+            </button>
+          </div>
           {customToys.length > 0 && (
             <button
               onClick={() => { setCustomToys([]); localStorage.removeItem('customToys'); setSelectedToy(TOYS[0]) }}
-              style={{ display: 'block', margin: '5px auto 0', background: 'none', border: 'none', fontSize: 10, color: '#C8A070', cursor: 'pointer', textDecoration: 'underline' }}
+              style={{ marginTop: 5, background: 'none', border: 'none', fontSize: 10, color: '#C8A070', cursor: 'pointer', textDecoration: 'underline' }}
             >
               {t('clear_custom', customToys.length)}
             </button>
@@ -179,18 +197,18 @@ export default function App() {
           onClick={() => setWaxed(w => !w)}
           style={{
             position: 'fixed', right: 14, bottom: 14, zIndex: 50,
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '9px 16px', borderRadius: 999,
+            display: 'flex', alignItems: 'center', gap: 7,
+            padding: '12px 20px', borderRadius: 999,
             border: `2px solid ${waxed ? '#C8A020' : '#C68B4A'}`,
             background: waxed ? 'linear-gradient(135deg,#FFF8C0,#FFE87A)' : 'white',
-            fontFamily: "'Fredoka One', cursive", fontSize: 12,
+            fontFamily: "'Fredoka One', cursive", fontSize: 16,
             color: waxed ? '#7A5800' : '#7A4A18',
             cursor: 'pointer',
-            boxShadow: waxed ? '0 4px 16px rgba(200,160,32,0.50)' : '0 4px 12px rgba(198,139,74,0.22)',
+            boxShadow: waxed ? '0 4px 20px rgba(200,160,32,0.55)' : '0 4px 14px rgba(198,139,74,0.28)',
             transition: 'all 0.18s',
           }}
         >
-          <span style={{ fontSize: 16, lineHeight: 1 }}>{waxed ? '✨' : '🕯️'}</span>
+          <span style={{ fontSize: 20, lineHeight: 1 }}>{waxed ? '✨' : '🕯️'}</span>
           {waxed ? t('waxed') : t('wax')}
         </button>
 
@@ -199,24 +217,25 @@ export default function App() {
           onClick={() => setCommunityOpen(true)}
           style={{
             position: 'fixed', left: 14, bottom: 14, zIndex: 50,
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '9px 16px', borderRadius: 999,
+            display: 'flex', alignItems: 'center', gap: 7,
+            padding: '12px 20px', borderRadius: 999,
             border: '2px solid #C68B4A', background: 'white',
-            fontFamily: "'Fredoka One', cursive", fontSize: 12, color: '#7A4A18',
-            cursor: 'pointer', boxShadow: '0 4px 12px rgba(198,139,74,0.22)',
+            fontFamily: "'Fredoka One', cursive", fontSize: 16, color: '#7A4A18',
+            cursor: 'pointer', boxShadow: '0 4px 14px rgba(198,139,74,0.28)',
           }}
           onMouseEnter={e => e.currentTarget.style.background = '#FFF0D8'}
           onMouseLeave={e => e.currentTarget.style.background = 'white'}
         >
-          <span style={{ fontSize: 16, lineHeight: 1 }}>🌍</span>
+          <span style={{ fontSize: 20, lineHeight: 1 }}>🌍</span>
           {t('community')}
         </button>
 
         {communityOpen && (
           <CommunityPage
             myToys={customToys}
-            onClose={() => setCommunityOpen(false)}
+            onClose={() => { setCommunityOpen(false); setCommunityShare(false) }}
             onPlay={handlePlayCommunity}
+            openShare={communityShare}
           />
         )}
       </div>

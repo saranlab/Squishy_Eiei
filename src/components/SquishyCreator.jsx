@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { CREATOR_COLORS, CREATOR_SHAPES, SPEED_PRESETS } from '../data/toys'
+import { CREATOR_COLORS, CREATOR_SHAPES } from '../data/toys'
 import MiniPreview from './MiniPreview'
 import SculptStudio from './SculptStudio'
 import { useLang } from '../lib/lang'
@@ -12,11 +12,22 @@ const FACE_TYPES = [
   { id: 'none',      emoji: '⬜', tk: 'face_none'  },
 ]
 
-const SPEEDS = [
-  { id: 'slow',   labelKey: 'speed_slow',   descKey: 'speed_slow_desc' },
-  { id: 'normal', labelKey: 'speed_normal', descKey: 'speed_normal_desc' },
-  { id: 'bouncy', labelKey: 'speed_bouncy', descKey: 'speed_bouncy_desc' },
-]
+// Piecewise-linear interpolation of spring params across a 0-100 slider.
+// Anchors: 0=slow, 50=normal, 100=bouncy — matching SPEED_PRESETS exactly.
+function interpolateRiseSpeed(val) {
+  const lerp = (a, b, t) => a + (b - a) * t
+  if (val <= 50) {
+    const s = val / 50
+    return { tension: lerp(18, 50, s), friction: lerp(12, 16, s), mass: lerp(8, 3, s) }
+  }
+  const s = (val - 50) / 50
+  return { tension: lerp(50, 120, s), friction: lerp(16, 22, s), mass: lerp(3, 1, s) }
+}
+
+function riseDurSec(rs) {
+  const ms = Math.max(1000, Math.round((rs.mass * rs.friction * 1200) / rs.tension))
+  return (ms / 1000).toFixed(1) + 's'
+}
 
 function lighten(hex) {
   const n = parseInt(hex.slice(1), 16)
@@ -52,12 +63,13 @@ export default function SquishyCreator({ onAdd, onClose }) {
   const [mode,           setMode]           = useState('preset')
   const [shape,          setShape]          = useState('sphere')
   const [color,          setColor]          = useState('#FF6B6B')
-  const [speed,          setSpeed]          = useState('slow')
+  const [speedVal,       setSpeedVal]       = useState(0)
   const [name,           setName]           = useState('')
   const [faceExpression, setFaceExpression] = useState('smile')
   const studioRef = useRef()
 
   function handleAdd() {
+    const riseSpeed = interpolateRiseSpeed(speedVal)
     if (mode === 'sculpt') {
       const composition = studioRef.current?.getComposition() ?? []
       const face = studioRef.current?.getFaceSettings() ?? {}
@@ -67,8 +79,7 @@ export default function SquishyCreator({ onAdd, onClose }) {
         emoji:       '🎨',
         geometry:    'composed',
         composition,
-        speed,
-        riseSpeed:   SPEED_PRESETS[speed],
+        riseSpeed,
         color:       composition[0]?.color ?? '#FF9090',
         colorDark:   darken(composition[0]?.color ?? '#FF9090'),
         ...face,
@@ -84,8 +95,7 @@ export default function SquishyCreator({ onAdd, onClose }) {
         colorLight:  lighten(color),
         geometry:    shape,
         customPositions: null,
-        speed,
-        riseSpeed:   SPEED_PRESETS[speed],
+        riseSpeed,
         faceExpression,
         faceDir: 'front',
         faceOffsetX: 0,
@@ -128,14 +138,16 @@ export default function SquishyCreator({ onAdd, onClose }) {
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '2px solid #E8D8C0', fontFamily: "'Fredoka One', cursive", fontSize: 15, color: '#7A4A18', background: 'white', outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div>
-                <label style={LABEL}>{t('rise_speed')}</label>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {SPEEDS.map(s => (
-                    <button key={s.id} onClick={() => setSpeed(s.id)} style={{ flex: 1, padding: '7px 4px', borderRadius: 10, border: speed===s.id?'2px solid #C68B4A':'2px solid #E8D8C0', background: speed===s.id?'#FFF0D8':'white', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                      <span style={{ fontSize: 13 }}>{t(s.labelKey)}</span>
-                      <span style={{ fontSize: 9, color: '#C8A070' }}>{t(s.descKey)}</span>
-                    </button>
-                  ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                  <label style={{ ...LABEL, marginBottom: 0 }}>{t('rise_speed')}</label>
+                  <span style={{ fontSize: 10, color: '#C68B4A', fontWeight: 700 }}>~{riseDurSec(interpolateRiseSpeed(speedVal))}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 13, flexShrink: 0 }}>🐌</span>
+                  <input type="range" min={0} max={100} step={1} value={speedVal}
+                    onChange={e => setSpeedVal(+e.target.value)}
+                    style={{ flex: 1, accentColor: '#C68B4A', height: 4 }} />
+                  <span style={{ fontSize: 13, flexShrink: 0 }}>🐇</span>
                 </div>
               </div>
             </div>
@@ -188,14 +200,16 @@ export default function SquishyCreator({ onAdd, onClose }) {
                   style={{ width: '100%', padding: '8px 10px', borderRadius: 10, border: '2px solid #E8D8C0', fontFamily: "'Fredoka One', cursive", fontSize: 14, color: '#7A4A18', background: 'white', outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={LABEL}>{t('rise_speed')}</label>
-                <div style={{ display: 'flex', gap: 5 }}>
-                  {SPEEDS.map(s => (
-                    <button key={s.id} onClick={() => setSpeed(s.id)} style={{ flex: 1, padding: '6px 2px', borderRadius: 9, border: speed===s.id?'2px solid #C68B4A':'2px solid #E8D8C0', background: speed===s.id?'#FFF0D8':'white', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                      <span style={{ fontSize: 11 }}>{t(s.labelKey)}</span>
-                      <span style={{ fontSize: 8, color: '#C8A070' }}>{t(s.descKey)}</span>
-                    </button>
-                  ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                  <label style={{ ...LABEL, marginBottom: 0 }}>{t('rise_speed')}</label>
+                  <span style={{ fontSize: 10, color: '#C68B4A', fontWeight: 700 }}>~{riseDurSec(interpolateRiseSpeed(speedVal))}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ fontSize: 12, flexShrink: 0 }}>🐌</span>
+                  <input type="range" min={0} max={100} step={1} value={speedVal}
+                    onChange={e => setSpeedVal(+e.target.value)}
+                    style={{ flex: 1, accentColor: '#C68B4A', height: 4 }} />
+                  <span style={{ fontSize: 12, flexShrink: 0 }}>🐇</span>
                 </div>
               </div>
             </div>

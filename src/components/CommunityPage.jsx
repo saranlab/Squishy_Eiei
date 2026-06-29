@@ -464,10 +464,10 @@ function ShareModal({ myToys, onDone, onClose }) {
 
 // ── Main CommunityPage ────────────────────────────────────────────────────────
 
-export default function CommunityPage({ onClose, myToys, onPlay }) {
+export default function CommunityPage({ onClose, myToys, onPlay, openShare = false }) {
   const [search,   setSearch]   = useState('')
   const [selected, setSelected] = useState(null)
-  const [sharing,  setSharing]  = useState(false)
+  const [sharing,  setSharing]  = useState(openShare)
   const [posts,    setPosts]    = useState([])
   const [loading,  setLoading]  = useState(true)
   const { t } = useLang()
